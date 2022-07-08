@@ -239,7 +239,7 @@ if [[ "$(hostname -d)" == clsp.jhu.edu ]]; then
     TSUKUYOMI=downloads
     VOXFORGE=
     AMI=/export/corpora4/ami/amicorpus
-    COMMONVOICE=downloads
+    COMMONVOICE=/home/cxiao7/research/speech2text/commonvoice/cv-corpus-9.0-2022-04-27
     BABEL_101=/export/babel/data/101-cantonese
     BABEL_102=/export/babel/data/102-assamese
     BABEL_103=/export/babel/data/103-bengali

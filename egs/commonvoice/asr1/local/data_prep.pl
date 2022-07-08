@@ -24,7 +24,7 @@ mkdir $out_dir unless -d $out_dir;
 
 open(CSV, "<", "$db_base/$dataset.tsv");
 
-open(CSV, "<", "$db_base/$dataset.tsv") or die "cannot open dataset CSV file";
+open(CSV, "<", "$db_base/$dataset.tsv") or die "cannot open $db_base/$dataset CSV file";
 open(SPKR,">", "$out_dir/utt2spk") or die "Could not open the output file $out_dir/utt2spk";
 open(GNDR,">", "$out_dir/utt2gender") or die "Could not open the output file $out_dir/utt2gender";
 open(TEXT,">", "$out_dir/text") or die "Could not open the output file $out_dir/text";
