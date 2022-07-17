@@ -9,8 +9,10 @@ import logging
 import sys
 from pathlib import Path
 from typing import List, Optional, TextIO, Union
+from espnet2.utils.types import str2triple_str
 
 import numpy as np
+import os
 import soundfile
 import torch
 
@@ -171,6 +173,8 @@ class CTCSegmentation:
     choices_time_stamps = ["auto", "fixed"]
     text_converter = "tokenize"
     choices_text_converter = ["tokenize", "classic"]
+    feat_type = "fbank_pitch"
+    choices_feat_type = ["fbank_pitch", "raw"]
     warned_about_misconfiguration = False
     config = CtcSegmentationParameters()
 
@@ -185,6 +189,8 @@ class CTCSegmentation:
         kaldi_style_text: bool = True,
         text_converter: str = "tokenize",
         time_stamps: str = "auto",
+        feat_type: str = "fbank_pitch",
+        num_frames2dur_ratio=None,
         **ctc_segmentation_args,
     ):
         """Initialize the CTCSegmentation module.
@@ -236,6 +242,7 @@ class CTCSegmentation:
         )
         asr_model.to(dtype=getattr(torch, dtype)).eval()
         self.preprocess_fn = ASRTask.build_preprocess_fn(asr_train_args, False)
+        self.collate_fn = ASRTask.build_collate_fn(asr_train_args, False)
 
         # Warn for nets with high memory consumption on long audio files
         if hasattr(asr_model, "encoder"):
@@ -252,6 +259,8 @@ class CTCSegmentation:
         self.device = device
         self.dtype = dtype
         self.ctc = asr_model.ctc
+        self.feat_type = feat_type
+        self.num_frames2dur_ratio = num_frames2dur_ratio
 
         self.kaldi_style_text = kaldi_style_text
         self.token_list = asr_model.token_list
@@ -371,11 +380,14 @@ class CTCSegmentation:
             if self.samples_to_frames_ratio is None:
                 ratio = self.estimate_samples_to_frames_ratio()
                 self.samples_to_frames_ratio = ratio
-            index_duration = self.samples_to_frames_ratio / self.fs
+            index_duration = self.samples_to_frames_ratio / \
+                self.fs if self.feat_type == "raw" else samples_to_frames_ratio / self.num_frames2dur_ratio
         else:
             assert self.time_stamps == "auto"
             samples_to_frames_ratio = speech_len / lpz_len
-            index_duration = samples_to_frames_ratio / self.fs
+            # If fbank, no need to / self.fs
+            index_duration = samples_to_frames_ratio / \
+                self.fs if self.feat_type == "raw" else samples_to_frames_ratio / self.num_frames2dur_ratio
         timing_cfg["index_duration"] = index_duration
         return timing_cfg
 
@@ -421,10 +433,13 @@ class CTCSegmentation:
         batch = {"speech": speech, "speech_lengths": lengths}
         batch = to_device(batch, device=self.device)
         # Encode input
+        logging.info("Batch looks like:")
+        logging.info(batch)
         enc, _ = self.asr_model.encode(**batch)
         assert len(enc) == 1, len(enc)
         # Apply ctc layer to obtain log character probabilities
         lpz = self.ctc.log_softmax(enc).detach()
+        logging.info(lpz.shape)
         #  Shape should be ( <time steps>, <classes> )
         lpz = lpz.squeeze(0).cpu().numpy()
         return lpz
@@ -520,6 +535,10 @@ class CTCSegmentation:
             ]
             token_list = [utt.replace("<unk>", "") for utt in token_list]
             ground_truth_mat, utt_begin_indices = prepare_text(config, token_list)
+
+        logging.info(ground_truth_mat)
+        logging.info(utt_begin_indices)
+        logging.info(len(utt_begin_indices))
         task = CTCSegmentationTask(
             config=config,
             name=name,
@@ -554,10 +573,13 @@ class CTCSegmentation:
         timings, char_probs, state_list = ctc_segmentation(
             config, lpz, ground_truth_mat
         )
+        logging.info(char_probs)
+        logging.info(timings)
         # Obtain list of utterances with time intervals and confidence score
         segments = determine_utterance_segments(
             config, utt_begin_indices, char_probs, timings, text
         )
+        logging.info(segments)
         # Store results
         result = {
             "name": task.name,
@@ -600,6 +622,81 @@ class CTCSegmentation:
         task.set(**segments)
         assert check_return_type(task)
         return task
+
+
+def parse_utt_metadata(utt2dur_fname):
+    res = {}
+
+    with open(utt2dur_fname, "r") as f:
+        for line in f:
+            uttid, dur = line.strip().split(" ")
+            res[uttid] = int(dur)
+
+    return res
+
+
+def ctc_align_batch(
+    log_level: Union[int, str],
+    asr_train_config: str,
+    asr_model_file: str,
+    data_path_and_name_and_type: str2triple_str,
+    text_dir: Path,
+    metadata_dir: Path,
+    fs: int,
+    output_dir: Path,
+    print_utt_text: bool = True,
+    print_utt_score: bool = True,
+    **kwargs,
+):
+    """Provide the scripting interface to align text to audio."""
+    assert check_argument_types()
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s",
+    )
+
+    # Ignore configuration values that are set to None (from parser).
+    kwargs = {k: v for (k, v) in kwargs.items() if v is not None}
+
+    if metadata_dir != "":
+        utt2dur = parse_utt_metadata(os.path.join(metadata_dir, "utt2dur"))
+        utt2num_frames = parse_utt_metadata(
+            os.path.join(metadata_dir, "utt2num_frames"))
+        for uttid in utt2dur:
+            kwargs["num_frames2dur_ratio"] = utt2num_frames[uttid] / utt2dur[uttid]
+            break
+
+    # Prepare CTC segmentation module
+    model = {
+        "asr_train_config": asr_train_config,
+        "asr_model_file": asr_model_file,
+    }
+    aligner = CTCSegmentation(**model, **kwargs)
+
+    loader = ASRTask.build_streaming_iterator(
+        data_path_and_name_and_type,
+        dtype=kwargs["dtype"],
+        preprocess_fn=aligner.preprocess_fn,
+        collate_fn=aligner.collate_fn,
+        inference=True,
+    )
+    for uttid, batch in loader:
+        logging.info(os.path.join(text_dir, uttid[0] + ".txt"))
+        with open(os.path.join(text_dir, uttid[0] + ".txt"), "r") as f:
+            transcripts = f.read()
+        speech = batch["speech"].squeeze(0)
+        logging.info(speech.shape)
+        segments = aligner(speech=speech,
+                           text=transcripts, fs=fs, name=uttid[0])
+
+        # Write to "segments" file or stdout
+        segments.print_utterance_text = print_utt_text
+        segments.print_confidence_score = print_utt_score
+        segments_str = str(segments)
+        output_fname = os.path.join(output_dir, uttid[0] + ".txt")
+        with open(output_fname, "w") as f:
+            f.write(segments_str)
+        break
 
 
 def ctc_align(
@@ -784,23 +881,23 @@ def get_parser():
         default=True,
         help="Include the confidence score in the segments output.",
     )
+
+    # Added for fbank_pitch features
     group.add_argument(
-        "-a",
-        "--audio",
+        "--feat_type",
+        type=str,
+        default=CTCSegmentation.feat_type,
+        choices=CTCSegmentation.choices_feat_type,
+        help="Input feature type.",
+    )
+    group.add_argument(
+        "--metadata_dir",
         type=Path,
-        required=True,
-        help="Input audio file.",
+        default="",
+        help="The metadata of the audio files, duration, frame number, etc."
     )
-    group.add_argument(
-        "-t",
-        "--text",
-        type=argparse.FileType("r"),
-        required=True,
-        help="Input text file."
-        " Each line contains the ground truth of a single utterance."
-        " Kaldi-style text files include the name of the utterance as"
-        " the first word in the line.",
-    )
+
+    group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-o",
         "--output",
@@ -808,6 +905,46 @@ def get_parser():
         default="-",
         help="Output in the form of a `segments` file."
         " If not given, output is written to stdout.",
+    )
+    group.add_argument(
+        "--output_dir",
+        type=Path,
+        default="",
+        help="Output directory.",
+    )
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "-t",
+        "--text",
+        type=argparse.FileType("r"),
+        default=None,
+        help="Input text file."
+        " Each line contains the ground truth of a single utterance."
+        " Kaldi-style text files include the name of the utterance as"
+        " the first word in the line.",
+    )
+    group.add_argument(
+        "--text_dir",
+        default="",
+        type=Path,
+        help="Input text directory.",
+    )
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "-a",
+        "--audio",
+        default="",
+        type=Path,
+        help="Input audio file.",
+    )
+    group.add_argument(
+        "--data_path_and_name_and_type",
+        type=str2triple_str,
+        default=None,
+        action="append",
+        help="Path to data as well as the data's name/type."
     )
     return parser
 
@@ -819,7 +956,10 @@ def main(cmd=None):
     args = parser.parse_args(cmd)
     kwargs = vars(args)
     kwargs.pop("config", None)
-    ctc_align(**kwargs)
+    if kwargs["data_path_and_name_and_type"]:
+        ctc_align_batch(**kwargs)
+    else:
+        ctc_align(**kwargs)
 
 
 if __name__ == "__main__":

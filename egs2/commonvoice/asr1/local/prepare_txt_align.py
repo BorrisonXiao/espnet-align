@@ -10,14 +10,14 @@ def format_sent(input_filename, output_filename, word_seg=False):
                 if word_seg:
                     raise NotImplementedError
                 else:
-                    print(f"utt{uttid} {line.strip()}", file=ofh)
+                    print(f"seg{uttid} {line.strip()}", file=ofh)
                     uttid += 1
     ofh.close()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Add utt# format for the alignment script.')
+        description='Add seg# format for the alignment script.')
     parser.add_argument('--input', type=str, required=True,
                         help='Input: processed, plain text file without utt#')
     parser.add_argument('--output', type=str, required=True,
