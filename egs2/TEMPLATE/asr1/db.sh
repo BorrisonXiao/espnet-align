@@ -211,6 +211,8 @@ fi
 
 # For only JHU environment
 if [[ "$(hostname -d)" == clsp.jhu.edu ]]; then
+    HKLEGCO=/home/cxiao7/research/speech2text/processed_data
+    HKLEGCO_VAD=/home/cxiao7/research/speech2text/vad_data
     AIDATATANG_200ZH=downloads
     AISHELL=
     AISHELL3=downloads

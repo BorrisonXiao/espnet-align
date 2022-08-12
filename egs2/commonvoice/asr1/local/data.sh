@@ -67,7 +67,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
 fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then 
-    log "stage3: Segment data using jieba"
+    log "stage3: Segment data using char/jieba"
     local/prepare_cv_text.sh
 fi
 

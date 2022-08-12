@@ -20,17 +20,16 @@ def read_segment_file(input_filename):
 def clip_single_audio(segid, uttid, start_time, end_time, audio, output_dir):
     out_fname = "_".join([segid, uttid + ".wav"])
     audio_clip = audio[start_time * 1000: end_time * 1000]
-    # logging.info(os.path.join(output_dir, out_fname))
     audio_clip.export(os.path.join(output_dir, out_fname), format="wav")
 
 
 def clip_audios(seg_file_dir, audio_dir, output_dir):
     for seg_file in os.listdir(seg_file_dir):
-        clip_fname_base = Path(seg_file).stem
+        seg_info = read_segment_file(os.path.join(seg_file_dir, seg_file))
+        clip_fname_base = seg_info[0]["uttid"]
         audio_fname_base = clip_fname_base.split("_", maxsplit=1)[1]
         audio_file = os.path.join(audio_dir, audio_fname_base + ".mp3")
         audio = AudioSegment.from_file(audio_file)
-        seg_info = read_segment_file(os.path.join(seg_file_dir, seg_file))
 
         for info in seg_info:
             info["audio"] = audio
