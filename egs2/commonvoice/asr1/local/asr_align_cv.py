@@ -646,6 +646,7 @@ def ctc_align_batch(
     output_dir: Path,
     print_utt_text: bool = True,
     print_utt_score: bool = True,
+    record: bool = True,
     **kwargs,
 ):
     """Provide the scripting interface to align text to audio."""
@@ -673,6 +674,14 @@ def ctc_align_batch(
     }
     aligner = CTCSegmentation(**model, **kwargs)
 
+    done_file = os.path.join(output_dir, ".done")
+    if os.path.exists(done_file):
+        done = set()
+        with open(done_file, "r") as f:
+            for line in f:
+                done.add(line.strip())
+            logging.info(done)
+
     loader = ASRTask.build_streaming_iterator(
         data_path_and_name_and_type,
         dtype=kwargs["dtype"],
@@ -681,6 +690,8 @@ def ctc_align_batch(
         inference=True,
     )
     for uttid, batch in loader:
+        if done is not None and uttid[0] in done:
+            continue
         logging.info(os.path.join(text_dir, uttid[0] + ".txt"))
         with open(os.path.join(text_dir, uttid[0] + ".txt"), "r") as f:
             transcripts = f.read()
@@ -693,10 +704,12 @@ def ctc_align_batch(
         segments.print_utterance_text = print_utt_text
         segments.print_confidence_score = print_utt_score
         segments_str = str(segments)
-        output_fname = os.path.join(output_dir, uttid[0] + ".txt")
+        output_fname = os.path.join(output_dir, uttid[0] + ".seg.txt")
         with open(output_fname, "w") as f:
             f.write(segments_str)
-        break
+        if record:
+            with open(done_file, "a") as f:
+                f.write(uttid[0])
 
 
 def ctc_align(
