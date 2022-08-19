@@ -22,6 +22,13 @@ min() {
 }
 SECONDS=0
 
+# Custom
+vad_data_dir=data/vad
+input_text_dir="/home/cxiao7/research/speech2text/test_data/txt/2017-02-08/can/word_seg"
+input_audio_dir="/home/cxiao7/research/espnet-cxiao/egs2/hklegco/asr1/exp/align_zh-HK/data/audio"
+skip_lm_train=false
+use_special_lm=true
+
 # General configuration
 stage=1              # Processes starts from the specified stage.
 stop_stage=10000     # Processes is stopped at the specified stage.
@@ -405,6 +412,9 @@ fi
 if [ -z "${asr_exp}" ]; then
     asr_exp="${expdir}/asr_${asr_tag}"
 fi
+if "${use_special_lm}"; then
+    asr_exp="${expdir}/asr_${asr_tag}_lm_special"
+fi
 if [ -z "${lm_exp}" ]; then
     lm_exp="${expdir}/lm_${lm_tag}"
 fi
@@ -437,10 +447,6 @@ if [ -z "${inference_tag}" ]; then
       inference_tag+="_use_nbest_rescoring_${use_nbest_rescoring}"
     fi
 fi
-
-vad_data_dir=data/vad
-input_text_dir="/home/cxiao7/research/speech2text/test_data/txt/2017-02-08/can/word_seg"
-input_audio_dir="/home/cxiao7/research/espnet-cxiao/egs2/hklegco/asr1/exp/align_zh-HK/data/audio"
 
 # ========================== Main stages start from here. ==========================
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
@@ -495,8 +501,257 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     fi
 fi
 
-if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
-    log "Stage 4: Decoding: decode_dir=${asr_exp}"
+
+if ! "${skip_lm_train}" && "${use_special_lm}"; then
+    _tk_list_dir=data/decode_tokens_list/${token_type}
+    lm_stats_dir=${lm_stats_dir}_special
+
+    if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
+        mkdir -p data/lm_train;
+        for dset in ${test_sets}; do
+            # Generate lm_train.txt for each utterance
+            ${python} local/generate_lm_train_text.py --text_map data/${dset}/text_map --output_dir data/lm_train
+        done
+    fi
+
+    # if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
+        # if [ "${token_type}" = char ] || [ "${token_type}" = word ]; then
+        #     log "Stage 5: Generate character level token_list"
+
+        #     _opts="--non_linguistic_symbols ${nlsyms_txt}"
+
+        #     mkdir -p _tk_list_dir
+
+        #     for dir in data/lm_train/*; do
+        #         # The first symbol in token_list must be "<blank>" and the last must be also sos/eos:
+        #         # 0 is reserved for CTC-blank for ASR and also used as ignore-index in the other task
+        #         uttid=${dir##*/}
+        #         lm_trn_txt=data/lm_train/${uttid}/"lm_train.txt"
+        #         # tk_list=${_tk_list_dir}/${uttid}/"tokens.txt"
+
+        #         ${python} -m espnet2.bin.tokenize_text  \
+        #             --token_type "${token_type}" \
+        #             --input "${lm_trn_txt}" --output "${token_list}" ${_opts} \
+        #             --field 2- \
+        #             --cleaner "${cleaner}" \
+        #             --g2p "${g2p}" \
+        #             --write_vocabulary true \
+        #             --add_symbol "${blank}:0" \
+        #             --add_symbol "${oov}:1" \
+        #             --add_symbol "${sos_eos}:-1"
+
+        #         # Create word-list for word-LM training
+        #         if ${use_word_lm} && [ "${token_type}" != word ]; then
+        #             # Generate word level token_list
+        #             ${python} -m espnet2.bin.tokenize_text \
+        #                 --token_type word \
+        #                 --input ${lm_trn_txt} --output "${tk_list}" \
+        #                 --field 2- \
+        #                 --cleaner "${cleaner}" \
+        #                 --g2p "${g2p}" \
+        #                 --write_vocabulary true \
+        #                 --vocabulary_size "${word_vocab_size}" \
+        #                 --add_symbol "${blank}:0" \
+        #                 --add_symbol "${oov}:1" \
+        #                 --add_symbol "${sos_eos}:-1"
+        #         fi
+        #     done
+        # else
+        #     log "Error: not supported --token_type '${token_type}'"
+        #     exit 2
+        # fi
+    # fi
+
+    if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
+        log "Stage 6: LM collect stats"
+
+        # 1. Split the key file
+        _logdir="${lm_stats_dir}/logdir"
+        mkdir -p "${_logdir}"
+
+        for dir in data/lm_train/*; do
+            # Re-initialize _opts for each lm
+            _opts=
+            if [ -n "${lm_config}" ]; then
+                # To generate the config file: e.g.
+                #   % python3 -m espnet2.bin.lm_train --print_config --optim adam
+                _opts+="--config ${lm_config} "
+            fi
+
+            uttid=${dir##*/}
+            key_file=data/lm_train/${uttid}/"lm_train.txt"
+            mkdir -p ${_logdir}/${uttid}
+
+            # Get the minimum number among ${nj} and the number lines of input files
+            _nj=$(min "${nj}" "$(<${key_file} wc -l)")
+            
+            split_scps=""
+            for n in $(seq ${_nj}); do
+                split_scps+=" ${_logdir}/${uttid}/train.${n}.scp"
+            done
+            # shellcheck disable=SC2086
+            utils/split_scp.pl "${key_file}" ${split_scps}
+
+            # Using training set as dev set to make espnet happy
+            split_scps=""
+            for n in $(seq ${_nj}); do
+                split_scps+=" ${_logdir}/${uttid}/dev.${n}.scp"
+            done
+            # shellcheck disable=SC2086
+            utils/split_scp.pl "${key_file}" ${split_scps}
+
+            # 2. Generate run.sh
+            log "Generate '${lm_stats_dir}/${uttid}/run.sh'. You can resume the process from stage 6 using this script"
+            mkdir -p "${lm_stats_dir}/${uttid}"; echo "${run_args} --stage 6 \"\$@\"; exit \$?" > "${lm_stats_dir}/${uttid}/run.sh"; chmod +x "${lm_stats_dir}/${uttid}/run.sh"
+
+            # 3. Submit jobs
+            log "LM collect-stats started... log: '${_logdir}/${uttid}/stats.*.log'"
+            # NOTE: --*_shape_file doesn't require length information if --batch_type=unsorted,
+            #       but it's used only for deciding the sample ids.
+            # shellcheck disable=SC2046,SC2086
+            ${train_cmd} JOB=1:"${_nj}" "${_logdir}"/${uttid}/stats.JOB.log \
+                ${python} -m espnet2.bin.lm_train \
+                    --collect_stats true \
+                    --use_preprocessor true \
+                    --bpemodel "${bpemodel}" \
+                    --token_type "${lm_token_type}"\
+                    --token_list "${token_list}" \
+                    --non_linguistic_symbols "${nlsyms_txt}" \
+                    --cleaner "${cleaner}" \
+                    --g2p "${g2p}" \
+                    --train_data_path_and_name_and_type "${key_file},text,text" \
+                    --valid_data_path_and_name_and_type "${key_file},text,text" \
+                    --train_shape_file "${_logdir}/${uttid}/train.JOB.scp" \
+                    --valid_shape_file "${_logdir}/${uttid}/dev.JOB.scp" \
+                    --output_dir "${_logdir}/${uttid}/stats.JOB" \
+                    ${_opts} ${lm_args} || { cat $(grep -l -i error "${_logdir}"/${uttid}/stats.*.log) ; exit 1; }
+
+            # 4. Aggregate shape files
+            _opts=
+            for i in $(seq "${_nj}"); do
+                _opts+="--input_dir ${_logdir}/${uttid}/stats.${i} "
+            done
+            # shellcheck disable=SC2086
+            ${python} -m espnet2.bin.aggregate_stats_dirs ${_opts} --output_dir "${lm_stats_dir}/${uttid}"
+
+            # Append the num-tokens at the last dimensions. This is used for batch-bins count
+            <"${lm_stats_dir}/${uttid}/train/text_shape" \
+                awk -v N="$(<${token_list} wc -l)" '{ print $0 "," N }' \
+                >"${lm_stats_dir}/${uttid}/train/text_shape.${lm_token_type}"
+
+            <"${lm_stats_dir}/${uttid}/valid/text_shape" \
+                awk -v N="$(<${token_list} wc -l)" '{ print $0 "," N }' \
+                >"${lm_stats_dir}/${uttid}/valid/text_shape.${lm_token_type}"
+        done
+    fi
+
+    if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
+        log "Stage 7: LM Training"
+
+        for dir in data/lm_train/*; do
+            _opts=
+            if [ -n "${lm_config}" ]; then
+                # To generate the config file: e.g.
+                #   % python3 -m espnet2.bin.lm_train --print_config --optim adam
+                _opts+="--config ${lm_config} "
+            fi
+            uttid=${dir##*/}
+            lm_trn_txt=data/lm_train/${uttid}/"lm_train.txt"
+
+            if [ "${num_splits_lm}" -gt 1 ]; then
+                # If you met a memory error when parsing text files, this option may help you.
+                # The corpus is split into subsets and each subset is used for training one by one in order,
+                # so the memory footprint can be limited to the memory required for each dataset.
+
+                _split_dir="${lm_stats_dir}/${uttid}/splits${num_splits_lm}"
+                if [ ! -f "${_split_dir}/.done" ]; then
+                    rm -f "${_split_dir}/.done"
+                    ${python} -m espnet2.bin.split_scps \
+                      --scps "${lm_trn_txt}" "${lm_stats_dir}/${uttid}/train/text_shape.${lm_token_type}" \
+                      --num_splits "${num_splits_lm}" \
+                      --output_dir "${_split_dir}"
+                    touch "${_split_dir}/.done"
+                else
+                    log "${_split_dir}/.done exists. Spliting is skipped"
+                fi
+
+                _opts+="--train_data_path_and_name_and_type ${_split_dir}/lm_train.txt,text,text "
+                _opts+="--train_shape_file ${_split_dir}/text_shape.${lm_token_type} "
+                _opts+="--multiple_iterator true "
+
+            else
+                _opts+="--train_data_path_and_name_and_type ${lm_trn_txt},text,text "
+                _opts+="--train_shape_file ${lm_stats_dir}/${uttid}/train/text_shape.${lm_token_type} "
+            fi
+
+            # NOTE(kamo): --fold_length is used only if --batch_type=folded and it's ignored in the other case
+
+            log "Generate '${lm_exp}/${uttid}/run.sh'. You can resume the process from stage 7 using this script"
+            mkdir -p "${lm_exp}/${uttid}"; echo "${run_args} --stage 7 \"\$@\"; exit \$?" > "${lm_exp}/${uttid}/run.sh"; chmod +x "${lm_exp}/${uttid}/run.sh"
+
+            log "LM training started... log: '${lm_exp}/${uttid}/train.log'"
+            if echo "${cuda_cmd}" | grep -e queue.pl -e queue-freegpu.pl &> /dev/null; then
+                # SGE can't include "/" nor "zh-CN" in a job name
+                IFS='_' read -ra ADDR <<< ${uttid}
+                # The job-id consists of the meeting ID and the metadata-based segment ID
+                jobname="$(basename ${lm_exp})_${ADDR[1]}_${ADDR[2]}"
+            else
+                jobname="${lm_exp}/train.log"
+            fi
+
+            _ngpu=1 # Needs only 1 GPU due to the one-line text training data
+
+            # shellcheck disable=SC2086
+            ${python} -m espnet2.bin.launch \
+                --cmd "${cuda_cmd} --name ${jobname}" \
+                --log "${lm_exp}/${uttid}"/train.log \
+                --ngpu "${_ngpu}" \
+                --num_nodes "${num_nodes}" \
+                --init_file_prefix "${lm_exp}/${uttid}"/.dist_init_ \
+                --multiprocessing_distributed true -- \
+                ${python} -m espnet2.bin.lm_train \
+                    --ngpu "${ngpu}" \
+                    --use_preprocessor true \
+                    --bpemodel "${bpemodel}" \
+                    --token_type "${lm_token_type}"\
+                    --token_list "${token_list}" \
+                    --non_linguistic_symbols "${nlsyms_txt}" \
+                    --cleaner "${cleaner}" \
+                    --g2p "${g2p}" \
+                    --valid_data_path_and_name_and_type "${lm_trn_txt},text,text" \
+                    --valid_shape_file "${lm_stats_dir}/${uttid}/valid/text_shape.${lm_token_type}" \
+                    --fold_length "${lm_fold_length}" \
+                    --resume true \
+                    --output_dir "${lm_exp}/${uttid}" \
+                    ${_opts} ${lm_args}
+        done 
+    fi
+
+    if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
+        log "Stage 8: Calc perplexity"
+        _opts=
+        for dir in data/lm_train/*; do
+            uttid=${dir##*/}
+            lm_trn_txt=data/lm_train/${uttid}/"lm_train.txt"
+            log "Perplexity calculation started... log: '${lm_exp}/${uttid}/perplexity_test/lm_calc_perplexity.log'"
+            # shellcheck disable=SC2086
+            ${cuda_cmd} --gpu "${ngpu}" "${lm_exp}/${uttid}"/perplexity_test/lm_calc_perplexity.log \
+                ${python} -m espnet2.bin.lm_calc_perplexity \
+                    --ngpu "${ngpu}" \
+                    --data_path_and_name_and_type "${lm_trn_txt},text,text" \
+                    --train_config "${lm_exp}/${uttid}"/config.yaml \
+                    --model_file "${lm_exp}/${uttid}/${inference_lm}" \
+                    --output_dir "${lm_exp}/${uttid}/perplexity_test" \
+                    ${_opts}
+            log "PPL: ${lm_trn_txt}: $(cat ${lm_exp}/${uttid}/perplexity_test/ppl)"
+        done
+    fi
+else
+    log "LM training skipped, using general LM for decoding..."
+fi
+
+if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
+    log "Stage 9: Decoding: decode_dir=${asr_exp}"
 
     if ${gpu_inference}; then
         _cmd="${cuda_cmd}"
@@ -506,124 +761,285 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
         _ngpu=0
     fi
 
-    _opts=
-    if [ -n "${inference_config}" ]; then
-        _opts+="--config ${inference_config} "
-    fi
-    if "${use_lm}"; then
-        if "${use_word_lm}"; then
-            _opts+="--word_lm_train_config ${lm_exp}/config.yaml "
-            _opts+="--word_lm_file ${lm_exp}/${inference_lm} "
-        else
-            _opts+="--lm_train_config ${lm_exp}/config.yaml "
-            _opts+="--lm_file ${lm_exp}/${inference_lm} "
+    if ! "${use_special_lm}"; then
+        _opts=
+        if [ -n "${inference_config}" ]; then
+            _opts+="--config ${inference_config} "
         fi
-    fi
-    if "${use_ngram}"; then
-            _opts+="--ngram_file ${ngram_exp}/${inference_ngram}"
-    fi
-
-    # 2. Generate run.sh
-    log "Generate '${asr_exp}/${inference_tag}/run.sh'. You can resume the process from stage 3 using this script"
-    mkdir -p "${asr_exp}/${inference_tag}"; echo "${run_args} --stage 3 \"\$@\"; exit \$?" > "${asr_exp}/${inference_tag}/run.sh"; chmod +x "${asr_exp}/${inference_tag}/run.sh"
-    if "${use_k2}"; then
-        # Now only _nj=1 is verified if using k2
-        asr_inference_tool="espnet2.bin.asr_inference_k2"
-
-        _opts+="--is_ctc_decoding ${k2_ctc_decoding} "
-        _opts+="--use_nbest_rescoring ${use_nbest_rescoring} "
-        _opts+="--num_paths ${num_paths} "
-        _opts+="--nll_batch_size ${nll_batch_size} "
-        _opts+="--k2_config ${k2_config} "
-    else
-        if "${use_streaming}"; then
-            asr_inference_tool="espnet2.bin.asr_inference_streaming"
-        elif "${use_maskctc}"; then
-            asr_inference_tool="espnet2.bin.asr_inference_maskctc"
-        else
-            asr_inference_tool="espnet2.bin.asr_inference"
-        fi
-    fi
-
-    for dset in ${test_sets}; do
-        _data="${data_feats}/${dset}"
-        _dir="${asr_exp}/${inference_tag}/${dset}"
-        _logdir="${_dir}/logdir"
-        mkdir -p "${_logdir}"
-
-        _feats_type="$(<${_data}/feats_type)"
-        if [ "${_feats_type}" = raw ]; then
-            _scp=wav.scp
-            if [[ "${audio_format}" == *ark* ]]; then
-                _type=kaldi_ark
+        if "${use_lm}"; then
+            if "${use_word_lm}"; then
+                _opts+="--word_lm_train_config ${lm_exp}/config.yaml "
+                _opts+="--word_lm_file ${lm_exp}/${inference_lm} "
             else
-                _type=sound
+                _opts+="--lm_train_config ${lm_exp}/config.yaml "
+                _opts+="--lm_file ${lm_exp}/${inference_lm} "
             fi
-        else
-            _scp=feats.scp
-            _type=kaldi_ark
+        fi
+        if "${use_ngram}"; then
+                _opts+="--ngram_file ${ngram_exp}/${inference_ngram}"
         fi
 
-        # 1. Split the key file
-        key_file=${_data}/${_scp}
-        split_scps=""
+        # 2. Generate run.sh
+        log "Generate '${asr_exp}/${inference_tag}/run.sh'. You can resume the process from stage 3 using this script"
+        mkdir -p "${asr_exp}/${inference_tag}"; echo "${run_args} --stage 3 \"\$@\"; exit \$?" > "${asr_exp}/${inference_tag}/run.sh"; chmod +x "${asr_exp}/${inference_tag}/run.sh"
         if "${use_k2}"; then
             # Now only _nj=1 is verified if using k2
-            _nj=1
+            asr_inference_tool="espnet2.bin.asr_inference_k2"
+
+            _opts+="--is_ctc_decoding ${k2_ctc_decoding} "
+            _opts+="--use_nbest_rescoring ${use_nbest_rescoring} "
+            _opts+="--num_paths ${num_paths} "
+            _opts+="--nll_batch_size ${nll_batch_size} "
+            _opts+="--k2_config ${k2_config} "
         else
-            _nj=$(min "${inference_nj}" "$(<${key_file} wc -l)")
+            if "${use_streaming}"; then
+                asr_inference_tool="espnet2.bin.asr_inference_streaming"
+            elif "${use_maskctc}"; then
+                asr_inference_tool="espnet2.bin.asr_inference_maskctc"
+            else
+                asr_inference_tool="espnet2.bin.asr_inference"
+            fi
         fi
 
-        for n in $(seq "${_nj}"); do
-            split_scps+=" ${_logdir}/keys.${n}.scp"
-        done
-        # shellcheck disable=SC2086
-        utils/split_scp.pl "${key_file}" ${split_scps}
+        for dset in ${test_sets}; do
+            _data="${data_feats}/${dset}"
+            _dir="${asr_exp}/${inference_tag}/${dset}"
+            _logdir="${_dir}/logdir"
+            mkdir -p "${_logdir}"
 
-        # 2. Submit decoding jobs
-        log "Decoding started... log: '${_logdir}/asr_inference.*.log'"
-        # shellcheck disable=SC2046,SC2086
-        ${_cmd} --gpu "${_ngpu}" JOB=1:"${_nj}" "${_logdir}"/asr_inference.JOB.log \
-            ${python} -m ${asr_inference_tool} \
-                --batch_size ${batch_size} \
-                --ngpu "${_ngpu}" \
-                --data_path_and_name_and_type "${_data}/${_scp},speech,${_type}" \
-                --key_file "${_logdir}"/keys.JOB.scp \
-                --asr_train_config "${asr_model_dir}"/config.yaml \
-                --asr_model_file "${asr_model_dir}"/"${inference_asr_model}" \
-                --output_dir "${_logdir}"/output.JOB \
-                ${_opts} ${inference_args} || { cat $(grep -l -i error "${_logdir}"/asr_inference.*.log) ; exit 1; }
-
-        # 3. Concatenates the output files from each jobs
-        for f in token token_int score text; do
-            if [ -f "${_logdir}/output.1/1best_recog/${f}" ]; then
-                for i in $(seq "${_nj}"); do
-                    cat "${_logdir}/output.${i}/1best_recog/${f}"
-                done | sort -k1 >"${_dir}/${f}"
+            _feats_type="$(<${_data}/feats_type)"
+            if [ "${_feats_type}" = raw ]; then
+                _scp=wav.scp
+                if [[ "${audio_format}" == *ark* ]]; then
+                    _type=kaldi_ark
+                else
+                    _type=sound
+                fi
+            else
+                _scp=feats.scp
+                _type=kaldi_ark
             fi
+
+            # 1. Split the key file
+            key_file=${_data}/${_scp}
+            split_scps=""
+            if "${use_k2}"; then
+                # Now only _nj=1 is verified if using k2
+                _nj=1
+            else
+                _nj=$(min "${inference_nj}" "$(<${key_file} wc -l)" "${_ngpu}")
+            fi
+
+            for n in $(seq "${_nj}"); do
+                split_scps+=" ${_logdir}/keys.${n}.scp"
+            done
+            # shellcheck disable=SC2086
+            utils/split_scp.pl "${key_file}" ${split_scps}
+
+            # 2. Submit decoding jobs
+            log "Decoding started... log: '${_logdir}/asr_inference.*.log'"
+            # shellcheck disable=SC2046,SC2086
+            ${_cmd} --gpu "${_ngpu}" JOB=1:"${_nj}" "${_logdir}"/asr_inference.JOB.log \
+                ${python} -m ${asr_inference_tool} \
+                    --batch_size ${batch_size} \
+                    --ngpu "${_ngpu}" \
+                    --data_path_and_name_and_type "${_data}/${_scp},speech,${_type}" \
+                    --key_file "${_logdir}"/keys.JOB.scp \
+                    --asr_train_config "${asr_model_dir}"/config.yaml \
+                    --asr_model_file "${asr_model_dir}"/"${inference_asr_model}" \
+                    --output_dir "${_logdir}"/output.JOB \
+                    ${_opts} ${inference_args} || { cat $(grep -l -i error "${_logdir}"/asr_inference.*.log) ; exit 1; }
+
+            # 3. Concatenates the output files from each jobs
+            for f in token token_int score text; do
+                if [ -f "${_logdir}/output.1/1best_recog/${f}" ]; then
+                    for i in $(seq "${_nj}"); do
+                        cat "${_logdir}/output.${i}/1best_recog/${f}"
+                    done | sort -k1 >"${_dir}/${f}"
+                fi
+            done
         done
-    done
+    else
+        echo "Using special LM"
+        dset=decode
+        _data="${data_feats}/${dset}"
+        # Generate separate wav.scp files
+        mkdir -p ${_data}/splitted
+        rm -r ${_data}/splitted/*
+        ${python} local/split_scp_files.py --input ${_data}/wav.scp --output_dir ${_data}/splitted
+
+        for dir in ${_data}/splitted/*; do
+            uttid=${dir##*/}
+
+            _opts=
+            if [ -n "${inference_config}" ]; then
+                _opts+="--config ${inference_config} "
+            fi
+
+            if "${use_word_lm}"; then
+                _opts+="--word_lm_train_config ${lm_exp}/${uttid}/config.yaml "
+                _opts+="--word_lm_file ${lm_exp}/${uttid}/${inference_lm} "
+            else
+                _opts+="--lm_train_config ${lm_exp}/${uttid}/config.yaml "
+                _opts+="--lm_file ${lm_exp}/${uttid}/${inference_lm} "
+            fi
+            
+            if "${use_ngram}"; then
+                    _opts+="--ngram_file ${ngram_exp}/${uttid}/${inference_ngram}"
+            fi
+
+            # 2. Generate run.sh
+            log "Generate '${asr_exp}/${inference_tag}/${uttid}/run.sh'. You can resume the process from stage 9 using this script"
+            mkdir -p "${asr_exp}/${inference_tag}/${uttid}"; echo "${run_args} --stage 9 \"\$@\"; exit \$?" > "${asr_exp}/${inference_tag}/${uttid}/run.sh"; chmod +x "${asr_exp}/${inference_tag}/${uttid}/run.sh"
+            if "${use_k2}"; then
+                # Now only _nj=1 is verified if using k2
+                asr_inference_tool="espnet2.bin.asr_inference_k2"
+
+                _opts+="--is_ctc_decoding ${k2_ctc_decoding} "
+                _opts+="--use_nbest_rescoring ${use_nbest_rescoring} "
+                _opts+="--num_paths ${num_paths} "
+                _opts+="--nll_batch_size ${nll_batch_size} "
+                _opts+="--k2_config ${k2_config} "
+            else
+                if "${use_streaming}"; then
+                    asr_inference_tool="espnet2.bin.asr_inference_streaming"
+                elif "${use_maskctc}"; then
+                    asr_inference_tool="espnet2.bin.asr_inference_maskctc"
+                else
+                    asr_inference_tool="espnet2.bin.asr_inference"
+                fi
+            fi
+
+            _dir="${asr_exp}/${inference_tag}/${dset}/${uttid}"
+            _logdir="${_dir}/logdir"
+            mkdir -p "${_logdir}"
+
+            _feats_type="$(<${_data}/feats_type)"
+            if [ "${_feats_type}" = raw ]; then
+                _scp=wav.scp
+                if [[ "${audio_format}" == *ark* ]]; then
+                    _type=kaldi_ark
+                else
+                    _type=sound
+                fi
+            else
+                _scp=feats.scp
+                _type=kaldi_ark
+            fi
+
+            # 1. Split the key file
+            key_file=${_data}/splitted/${uttid}/${_scp}
+            split_scps=""
+            if "${use_k2}"; then
+                # Now only _nj=1 is verified if using k2
+                _nj=1
+            else
+                _nj=$(min "${inference_nj}" "$(<${key_file} wc -l)" "${_ngpu}")
+            fi
+
+            for n in $(seq "${_nj}"); do
+                split_scps+=" ${_logdir}/keys.${n}.scp"
+            done
+            # shellcheck disable=SC2086
+            utils/split_scp.pl "${key_file}" ${split_scps}
+
+            # 2. Submit decoding jobs
+            log "Decoding started... log: '${_logdir}/asr_inference.*.log'"
+            # shellcheck disable=SC2046,SC2086
+            ${_cmd} --gpu "${_ngpu}" JOB=1:"${_nj}" "${_logdir}"/asr_inference.JOB.log \
+                ${python} -m ${asr_inference_tool} \
+                    --batch_size ${batch_size} \
+                    --ngpu "${_ngpu}" \
+                    --data_path_and_name_and_type "${_data}/splitted/${uttid}/${_scp},speech,${_type}" \
+                    --key_file "${_logdir}"/keys.JOB.scp \
+                    --asr_train_config "${asr_model_dir}"/config.yaml \
+                    --asr_model_file "${asr_model_dir}"/"${inference_asr_model}" \
+                    --output_dir "${_logdir}"/output.JOB \
+                    ${_opts} ${inference_args} || { cat $(grep -l -i error "${_logdir}"/asr_inference.*.log) ; exit 1; }
+
+            # 3. Concatenates the output files from each jobs
+            for f in token token_int score text; do
+                if [ -f "${_logdir}/output.1/1best_recog/${f}" ]; then
+                    for i in $(seq "${_nj}"); do
+                        cat "${_logdir}/output.${i}/1best_recog/${f}"
+                    done | sort -k1 >"${_dir}/${f}"
+                fi
+            done
+            
+        done
+    fi
 fi
 
-if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
-    log "Stage 5: Merge decoded text for each utterance."
-    for dset in ${test_sets}; do
+if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
+    log "Stage 10: Merge decoded text for each utterance."
+    
+    dset=decode
+    decoded_dir="${asr_exp}/${inference_tag}/${dset}"
+    if ! "${use_special_lm}"; then
         _dir="${asr_exp}/${inference_tag}/${dset}"
-        mkdir -p ${_dir}/merged; rm ${_dir}/merged/*
+        mkdir -p ${_dir}/merged; rm ${_dir}/merged/*.txt
         ${python} local/merge_txt.py --input ${_dir}/text --output_dir ${_dir}/merged --decode
-    done
+    else
+        for dir in ${decoded_dir}/*; do
+            uttid="${dir##*/}"
+            mkdir -p "${dir}/merged"; rm -f "${dir}/merged"/*.txt
+            ${python} local/merge_txt.py --input "${dir}"/text --output_dir "${dir}"/merged --decode
+        done
+    fi
 fi
 
-if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
-    log "Stage 6: Compute the Levenshtein distance of the decoded text and the groud-truth text."
-    for dset in ${test_sets}; do
+if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
+    log "Stage 11: Compute the Levenshtein distance of the decoded text and the groud-truth text."
+    dset=decode
+    decoded_dir="${asr_exp}/${inference_tag}/${dset}"
+    if ! "${use_special_lm}"; then
         _dir="${asr_exp}/${inference_tag}/${dset}"
+        # ${python} local/levenshtein.py \
+        #     --decoded_dir ${_dir}/merged \
+        #     --text_map data/${dset}/text_map \
+        #     --output_dir ${_dir}/anchors
+
+        mkdir -p ${_dir}/to_align
         mkdir -p ${_dir}/anchors/raw
-        ${python} local/levenshtein.py \
+        ${python} local/txt_pre_align.py \
             --decoded_dir ${_dir}/merged \
             --text_map data/${dset}/text_map \
-            --output_dir ${_dir}/anchors
-    done
+            --output_dir ${_dir}/to_align
+
+        for dir in ${_dir}/merged/*; do
+            f=${dir##*/}
+            uttid=${f%%.*}
+            align-text \
+            ark:${_dir}/to_align/${uttid}.original \
+            ark:${_dir}/to_align/${uttid}.decoded \
+            ark,t:- \
+            | ${MAIN_ROOT}/egs2/wsj/asr1/utils/scoring/wer_per_utt_details.pl > ${_dir}/anchors/raw/${uttid}.anchor
+        done
+    else
+        # for dir in ${decoded_dir}/*; do
+        #     mkdir -p ${dir}/anchors/raw
+        #     ${python} local/levenshtein.py \
+        #         --decoded_dir ${dir}/merged \
+        #         --text_map data/${dset}/text_map \
+        #         --output_dir ${dir}/anchors
+        # done
+
+        for dir in ${decoded_dir}/*; do
+            uttid="${dir##*/}"
+            mkdir -p ${dir}/to_align
+            mkdir -p ${dir}/anchors/raw
+            ${python} local/txt_pre_align.py \
+                --decoded_dir ${dir}/merged \
+                --text_map data/${dset}/text_map \
+                --output_dir ${dir}/to_align
+            
+            align-text \
+            ark:${dir}/to_align/${uttid}.original \
+            ark:${dir}/to_align/${uttid}.decoded \
+            ark,t:- \
+            | ${MAIN_ROOT}/egs2/wsj/asr1/utils/scoring/wer_per_utt_details.pl > ${dir}/anchors/raw/${uttid}.anchor
+        done
+    fi
 fi
 
 log "Successfully finished. [elapsed=${SECONDS}s]"

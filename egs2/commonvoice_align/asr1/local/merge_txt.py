@@ -26,7 +26,10 @@ def merge_decode_text(input, output_dir, max_line_cache=1000):
         buffer = {}
         counter = 0
         for line in f:
-            segid, text = line.strip().split(" ", maxsplit=1)
+            splitted = line.strip().split(" ", maxsplit=1)
+            if len(splitted) <= 1:
+                continue
+            segid, text = splitted
             uttid = segid2uttid(segid)
             buffer[uttid] = text if uttid not in buffer else " ".join(
                 [buffer[uttid], text])

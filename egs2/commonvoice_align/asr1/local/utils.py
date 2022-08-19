@@ -1,5 +1,6 @@
 import numpy as np
 from typing import (List, overload)
+import json
 
 
 class Integerizer():
@@ -25,6 +26,17 @@ class Integerizer():
     def index(self, token):
         assert type(token) in [str, list]
         return self.token2int[token] if type(token) == str else [self.token2int[t] for t in token]
+
+    def store_vocab(self, output):
+        # Store the vocab as a json object
+        with open(output, "w") as f:
+            json.dump({"token2int": self.token2int, "int2token": self.int2token}, f)
+
+    def load_vocab(self, vocab):
+        # Load the vocab from a json file
+        with open(vocab, "r") as f:
+            vocab_info = json.load(f)
+            self.token2int, self.int2token = vocab_info["token2int"], vocab_info["int2token"]
 
 
 def levenshtein(str1, str2):
@@ -103,10 +115,3 @@ def levenshtein(str1, str2):
     res1, res2 = " ".join(res1_raw), " ".join(res2_raw)
 
     return dp[-1, -1], res1, res2
-
-
-# str2 = "h e l l o"
-# str1 = "k e l m"
-# str1 = "二 火 腿 現 時 嘅 方 將 條 例 第 二 十 四 條 例 係 列 文 座 方 法 可 以 最 高 唔 知 六 十 幾 年 "
-# str2 = "代 理 主 席 現 時 放 債 人 條 例 第 24 條 列 明 放 債 人 可 以 最 高 60 % 的 年"
-# print(levenshtein(str1, str2))
