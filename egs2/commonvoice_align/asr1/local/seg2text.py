@@ -6,9 +6,17 @@ import re
 
 
 def text_char_seg(text):
+    """
+    Add space between chars as delimiter.
+    Note that spaces won't be added between numbers and English letters,
+    e.g. "1980" => "1980", "Financial Institution" => "Financial Institution",
+    "一九八零年" => "一 九 八 零 年".
+    """
     res = text
-    # Replace spaces between English letters with _
-    res = re.sub(r"([a-z]+)\s+([a-z]+)", r"\1_\2", res)
+    # Replace spaces between English letters with "_", note that this should
+    # be executed twice due to python re's implementation
+    res = re.sub(r"([a-zA-Z\d]+)\s+([a-zA-Z\d]+)", r"\1_\2", res)
+    res = re.sub(r"([a-zA-Z\d]+)\s+([a-zA-Z\d]+)", r"\1_\2", res)
     # Remove all spaces
     res = re.sub(r"\s+", "", res)
     # Replace the _ with a space

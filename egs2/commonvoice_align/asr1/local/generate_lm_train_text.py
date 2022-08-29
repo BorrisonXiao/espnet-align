@@ -1,10 +1,7 @@
 import argparse
 import os
 from pathlib import Path
-
-
-def mkdir_if_not_exist(path):
-    Path(path).mkdir(parents=True, exist_ok=True)
+from utils import mkdir_if_not_exist
 
 
 def generate_text(text_map, output_dir):

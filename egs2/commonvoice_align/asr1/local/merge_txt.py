@@ -2,11 +2,7 @@ import logging
 import argparse
 from pathlib import Path
 import os
-
-
-def segid2uttid(segid):
-    splitted = segid.split("_")
-    return "_".join(splitted[:-1])
+from utils import segid2uttid
 
 
 def clear_buffer(buffer, output_dir):

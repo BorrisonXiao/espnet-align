@@ -22,12 +22,18 @@ min() {
 }
 SECONDS=0
 
-# Custom
+# General
 vad_data_dir=data/vad
 input_text_dir="/home/cxiao7/research/speech2text/test_data/txt/2017-02-08/can/word_seg"
 input_audio_dir="/home/cxiao7/research/espnet-cxiao/egs2/hklegco/asr1/exp/align_zh-HK/data/audio"
 skip_lm_train=false
+seg_file_format="json" # Segment file format: "json", "kaldi"
+
+# Alignment-related
 use_special_lm=true
+phoneme_align=false
+ignore_tone=true
+eps="***"
 
 # General configuration
 stage=1              # Processes starts from the specified stage.
@@ -45,6 +51,7 @@ gpu_inference=true   # Whether to perform gpu decoding.
 dumpdir=dump         # Directory to dump features.
 expdir=exp           # Directory to save experiments.
 python=python3       # Specify python to execute espnet commands.
+align_dir=
 
 # Data preparation related
 local_data_opts= # The options given to local/data.sh.
@@ -382,6 +389,9 @@ if [ -z "${lm_tag}" ]; then
     if [ -n "${lm_args}" ]; then
         lm_tag+="$(echo "${lm_args}" | sed -e "s/--/\_/g" -e "s/[ |=/]//g")"
     fi
+fi
+if [ -z "${align_dir}" ]; then
+    align_dir=${expdir}/align_${asr_tag}_${lm_tag}
 fi
 
 # The directory used for collect-stats mode
@@ -992,54 +1002,126 @@ if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
     log "Stage 11: Compute the Levenshtein distance of the decoded text and the groud-truth text."
     dset=decode
     decoded_dir="${asr_exp}/${inference_tag}/${dset}"
+    raw_anchor_dir="${align_dir}/anchors/raw"
+    token_tag=char
+    _opts=
+
+    # Requires pip install pinyin_jyutping_sentence if --phoneme_align
+    if "${phoneme_align}"; then
+        token_tag=phoneme
+        _opts+="--use_phoneme "
+        if "${ignore_tone}"; then
+            _opts+="--ignore_tone "
+        fi
+    fi
+
+    token_anchor_dir="${raw_anchor_dir}/${token_tag}"
+    mkdir -p ${token_anchor_dir}; mkdir -p ${raw_anchor_dir}/char
+
+    # Requires pip install cn2an for numbers2chars conversion
     if ! "${use_special_lm}"; then
         _dir="${asr_exp}/${inference_tag}/${dset}"
-        # ${python} local/levenshtein.py \
-        #     --decoded_dir ${_dir}/merged \
-        #     --text_map data/${dset}/text_map \
-        #     --output_dir ${_dir}/anchors
+        to_align_dir=${_dir}/to_align
+        mkdir -p ${to_align_dir}
 
-        mkdir -p ${_dir}/to_align
-        mkdir -p ${_dir}/anchors/raw
         ${python} local/txt_pre_align.py \
             --decoded_dir ${_dir}/merged \
             --text_map data/${dset}/text_map \
-            --output_dir ${_dir}/to_align
+            --output_dir ${to_align_dir} ${_opts}
 
         for dir in ${_dir}/merged/*; do
             f=${dir##*/}
             uttid=${f%%.*}
             align-text \
-            ark:${_dir}/to_align/${uttid}.original \
-            ark:${_dir}/to_align/${uttid}.decoded \
-            ark,t:- \
-            | ${MAIN_ROOT}/egs2/wsj/asr1/utils/scoring/wer_per_utt_details.pl > ${_dir}/anchors/raw/${uttid}.anchor
+                --special-symbol="${eps}" \
+                ark:${to_align_dir}/${token_tag}/${uttid}.original \
+                ark:${to_align_dir}/${token_tag}/${uttid}.decoded \
+                ark,t:- \
+                | ${MAIN_ROOT}/egs2/wsj/asr1/utils/scoring/wer_per_utt_details.pl \
+                --special-symbol="${eps}" \
+                > ${token_anchor_dir}/${uttid}.anchor
+            
+            # Map the phoneme alignment result back to chars if --phoneme_align
+            if "${phoneme_align}"; then
+                ${python} local/ph2char.py \
+                    --anchor_file ${token_anchor_dir}/${uttid}.anchor \
+                    --hyp_file ${to_align_dir}/char/${uttid}.decoded \
+                    --ref_file ${to_align_dir}/char/${uttid}.original \
+                    --output ${raw_anchor_dir}/char/${uttid}.anchor \
+                    --eps "${eps}"
+            fi 
         done
     else
-        # for dir in ${decoded_dir}/*; do
-        #     mkdir -p ${dir}/anchors/raw
-        #     ${python} local/levenshtein.py \
-        #         --decoded_dir ${dir}/merged \
-        #         --text_map data/${dset}/text_map \
-        #         --output_dir ${dir}/anchors
-        # done
-
         for dir in ${decoded_dir}/*; do
             uttid="${dir##*/}"
-            mkdir -p ${dir}/to_align
-            mkdir -p ${dir}/anchors/raw
+            to_align_dir=${dir}/to_align
+            mkdir -p ${to_align_dir}
+
             ${python} local/txt_pre_align.py \
                 --decoded_dir ${dir}/merged \
                 --text_map data/${dset}/text_map \
-                --output_dir ${dir}/to_align
+                --output_dir ${to_align_dir} ${_opts}
             
             align-text \
-            ark:${dir}/to_align/${uttid}.original \
-            ark:${dir}/to_align/${uttid}.decoded \
-            ark,t:- \
-            | ${MAIN_ROOT}/egs2/wsj/asr1/utils/scoring/wer_per_utt_details.pl > ${dir}/anchors/raw/${uttid}.anchor
+                --special-symbol="${eps}" \
+                ark:${to_align_dir}/${token_tag}/${uttid}.original \
+                ark:${to_align_dir}/${token_tag}/${uttid}.decoded \
+                ark,t:- \
+                | ${MAIN_ROOT}/egs2/wsj/asr1/utils/scoring/wer_per_utt_details.pl \
+                --special-symbol="${eps}" \
+                > ${token_anchor_dir}/${uttid}.anchor
+            
+            # Map the phoneme alignment result back to chars if --phoneme_align
+            if "${phoneme_align}"; then
+                ${python} local/ph2char.py \
+                    --anchor_file ${token_anchor_dir}/${uttid}.anchor \
+                    --hyp_file ${to_align_dir}/char/${uttid}.decoded \
+                    --ref_file ${to_align_dir}/char/${uttid}.original \
+                    --output ${raw_anchor_dir}/char/${uttid}.anchor \
+                    --eps "${eps}"
+            fi 
         done
     fi
+fi
+
+if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
+    log "Stage 12: Prepare the data for segmentation."
+    dset=decode
+    char_anchor_dir=${align_dir}/anchors/raw/char
+    mkdir -p ${align_dir}/anchors/keys
+
+    # Generate the key file in the format "<anchor_file_path> <text_file_path>"
+    if ! "${use_special_lm}"; then
+        mkdir -p ${align_dir}/anchors/keys/dump; rm -f ${align_dir}/anchors/keys/dump/*/text
+        ${python} local/generate_seg_key_file.py \
+            --text ${asr_exp}/${inference_tag}/${dset}/text \
+            --anchor_dir ${char_anchor_dir} \
+            --output ${align_dir}/anchors/keys/anchors.scp
+    else 
+        ${python} local/generate_seg_key_file.py \
+            --decoded_dir ${asr_exp}/${inference_tag}/${dset} \
+            --anchor_dir ${char_anchor_dir} \
+            --output ${align_dir}/anchors/keys/anchors.scp
+    fi
+
+    # Generate the clip_info key file for segmentation
+    ${python} local/generate_clip_info.py \
+        --vad_dir ${vad_data_dir}/${dset} \
+        --output ${align_dir}/anchors/keys/clip_info \
+        --input_format ${seg_file_format}
+fi
+
+if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
+    log "Stage 13: Determine each VAD segment's corresponding ground-truth text."
+    key_file=${align_dir}/anchors/keys/anchors.scp
+    clip_info=${align_dir}/anchors/keys/clip_info
+    mkdir -p ${align_dir}/anchors/outputs
+
+    ${python} local/seg_align.py \
+        --key_file ${key_file} \
+        --output_dir ${align_dir}/anchors/outputs \
+        --clip_info_file ${clip_info} \
+        --eps "${eps}"
 fi
 
 log "Successfully finished. [elapsed=${SECONDS}s]"
