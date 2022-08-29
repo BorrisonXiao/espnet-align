@@ -46,8 +46,9 @@ fi
 #     --asr_model_dir ${asr_model_dir} \
 #     --lm_tag ${lm_tag} \
 #     --inference_nj 4 \
+#     --phoneme_align true \
 #     --stage 11 \
-#     --stop_stage 11
+#     --stop_stage 13
 
 ./decode_vad.sh \
     --ngpu 4 \
@@ -67,5 +68,6 @@ fi
     --inference_nj 4 \
     --skip_lm_train true \
     --use_special_lm false \
-    --stage 11 \
-    --stop_stage 11
+    --phoneme_align true \
+    --stage 12 \
+    --stop_stage 12

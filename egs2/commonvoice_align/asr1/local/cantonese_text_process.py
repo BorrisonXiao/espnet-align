@@ -10,12 +10,9 @@ from seg2text import text_char_seg
 import re
 import os
 from pathlib import Path
+from utils import mkdir_if_not_exist
 
 chinese_punc = re.compile(r'\！|\？|\。|\＂|\＃|\＄|\％|\＆|\＇|\（|\）|\＊|\＋|\，|\－|\／|\：|\︰|\；|\＜|\＝|\＞|\＠|\［|\＼|\］|\＾|\＿|\｀|\｛|\｜|\｝|\～|\｟|\｠|\｢|\｣|\､|\〃|\《|\》|\》|\「|\」|\『|\』|\【|\】|\〔|\〕|\〖|\〗|\〘|\〙|\〚|\〛|\〜|\〝|\〞|\〟|\〰|\〾|\〿|\–—|\|\‘|\’|\‛|\“|\”|\"|\„|\‟|\…|\‧|\﹏|\、|\,|\.|\:|\?')
-
-
-def mkdir_if_not_exist(path):
-    Path(path).mkdir(parents=True, exist_ok=True)
 
 
 def clean_hklegco_text(input_dir, output_dir, use_jieba=False):
