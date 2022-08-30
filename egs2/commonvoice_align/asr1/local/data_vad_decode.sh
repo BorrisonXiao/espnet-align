@@ -36,7 +36,10 @@ log "data preparation started"
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     log "stage1: Preparing post-vad hklegco data"
     
-    ${python} local/decode_data_prep.py --data_dir ${local_data_dir}/decode --output $dst/wav.scp.unsorted --utt2spk_output $dst/utt2spk.unsorted
+    ${python} local/decode_data_prep.py \
+        --data_dir ${local_data_dir}/decode \
+        --output $dst/wav.scp.unsorted \
+        --utt2spk_output $dst/utt2spk.unsorted
     sort -o $dst/utt2spk $dst/utt2spk.unsorted
     rm $dst/utt2spk.unsorted
     sort -o $dst/wav.scp $dst/wav.scp.unsorted
@@ -48,7 +51,9 @@ fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then 
     log "stage2: Tokenize text data using char/jieba and yield a text file"
-    ${python} local/cantonese_text_process.py --input_dir ${txt_data_dir} --output_dir ${dst}
+    ${python} local/cantonese_text_process.py \
+        --input_dir ${txt_data_dir} \
+        --output_dir ${dst}
 fi
 
 log "Successfully finished. [elapsed=${SECONDS}s]"

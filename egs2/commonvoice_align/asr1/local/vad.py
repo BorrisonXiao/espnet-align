@@ -1,22 +1,20 @@
 import argparse
 import json
-from pydoc import cli
 import torch
 from pathlib import Path
 import os
 from clip_segments import clip_single_audio
 from pydub import AudioSegment
+from utils import mkdir_if_not_exist
 
 
-def mkdir_if_not_exist(path):
-    Path(path).mkdir(parents=True, exist_ok=True)
-
-
-def labels2sec(labels, fs):
-    res = []
+def labels2sec(labels, fs, uttid):
+    res = {}
     for i, label in enumerate(labels):
-        res.append(
-            {"segid": f"seg{i+1:03}", "start": label["start"] / fs, "end": label["end"] / fs})
+        res[f"{uttid}_seg{i+1:03}"] = {"start": label["start"]
+                                       / fs, "end": label["end"] / fs}
+        # res.append(
+        #     {"segid": f"{uttid}_seg{i+1:03}", "start": label["start"] / fs, "end": label["end"] / fs})
 
     return res
 
@@ -29,7 +27,7 @@ def single_audio_vad(audio, model, fs, output_dir, read_audio, get_speech_timest
 
     wav = read_audio(audio, sampling_rate=fs)
     speech_labels = get_speech_timestamps(wav, model, sampling_rate=fs)
-    segments = labels2sec(speech_labels, fs)
+    segments = labels2sec(speech_labels, fs, uttid)
 
     # if args.concatenate:
     #     save_audio('only_speech.wav',
@@ -42,11 +40,12 @@ def single_audio_vad(audio, model, fs, output_dir, read_audio, get_speech_timest
         clip_dir = os.path.join(seg_dir, "clips")
         mkdir_if_not_exist(clip_dir)
         audio_raw = AudioSegment.from_file(audio)
-        for segment in segments:
-            segment["uttid"] = uttid
-            segment["audio"] = audio_raw
-            segment["output_dir"] = clip_dir
-            clip_single_audio(**segment)
+        for segid, timestamp in segments.items():
+            seg = timestamp
+            seg["segid"] = segid
+            seg["audio"] = audio_raw
+            seg["output_dir"] = clip_dir
+            clip_single_audio(**seg)
 
     return segments
 
