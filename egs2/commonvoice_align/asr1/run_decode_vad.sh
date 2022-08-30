@@ -15,7 +15,7 @@ test_set="decode"
 asr_config=conf/tuning/train_asr_conformer5.yaml
 lm_config=conf/train_lm.yaml
 lm_config_small=conf/train_lm_small.yaml
-inference_config=conf/decode_asr.yaml
+inference_config=conf/decode_ngram.yaml
 asr_model_dir=exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
 lm_exp=exp/lm_train_lm_zh-HK_word
 lm_tag=special
@@ -30,8 +30,28 @@ else
   nbpe=150
 fi
 
+./decode_vad.sh \
+    --ngpu 2 \
+    --lang "${lang}" \
+    --use_lm false \
+    --lm_config "${lm_config}" \
+    --token_type word \
+    --nbpe $nbpe \
+    --feats_type raw \
+    --speed_perturb_factors "0.9 1.0 1.1" \
+    --asr_config "${asr_config}" \
+    --inference_config "${inference_config}" \
+    --test_sets ${test_set} \
+    --asr_tag  "decode_vad" \
+    --asr_model_dir ${asr_model_dir} \
+    --lm_tag ${lm_tag} \
+    --inference_nj 4 \
+    --phoneme_align true \
+    --stage 13 \
+    --stop_stage 14
+
 # ./decode_vad.sh \
-#     --ngpu 2 \
+#     --ngpu 4 \
 #     --lang "${lang}" \
 #     --use_lm true \
 #     --lm_config "${lm_config}" \
@@ -44,30 +64,10 @@ fi
 #     --test_sets ${test_set} \
 #     --asr_tag  "decode_vad" \
 #     --asr_model_dir ${asr_model_dir} \
-#     --lm_tag ${lm_tag} \
+#     --lm_exp ${lm_exp} \
 #     --inference_nj 4 \
+#     --skip_lm_train true \
+#     --use_special_lm false \
 #     --phoneme_align true \
-#     --stage 11 \
+#     --stage 13 \
 #     --stop_stage 13
-
-./decode_vad.sh \
-    --ngpu 4 \
-    --lang "${lang}" \
-    --use_lm true \
-    --lm_config "${lm_config}" \
-    --token_type word \
-    --nbpe $nbpe \
-    --feats_type raw \
-    --speed_perturb_factors "0.9 1.0 1.1" \
-    --asr_config "${asr_config}" \
-    --inference_config "${inference_config}" \
-    --test_sets ${test_set} \
-    --asr_tag  "decode_vad" \
-    --asr_model_dir ${asr_model_dir} \
-    --lm_exp ${lm_exp} \
-    --inference_nj 4 \
-    --skip_lm_train true \
-    --use_special_lm false \
-    --phoneme_align true \
-    --stage 12 \
-    --stop_stage 12

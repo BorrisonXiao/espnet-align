@@ -31,6 +31,15 @@ def read_anchor_file(file, return_uttid=False):
     return ref, hyp, op, csid
 
 
+def parse_segments_file(file):
+    res = {}
+    with open(file, "r") as f:
+        for line in f:
+            segid, _, start, end = line.strip().split(" ")
+            res[segid] = {"start": start, "end": end}
+    return res
+
+
 class Integerizer():
     def __init__(self, tokens: List):
         self.token2int = {}

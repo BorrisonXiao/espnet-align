@@ -1,8 +1,8 @@
 import argparse
 import os
 from pathlib import Path
-import re
-from utils import mkdir_if_not_exist, read_anchor_file
+import json
+from utils import mkdir_if_not_exist, read_anchor_file, parse_segments_file
 
 
 def read_seg_text(file):
@@ -13,7 +13,10 @@ def read_seg_text(file):
     res = []
     with open(file, "r") as f:
         for line in f:
-            segid, text = line.strip().split(" ", maxsplit=1)
+            line = line.strip().split(" ", maxsplit=1)
+            if len(line) <= 1:
+                continue
+            segid, text = line
             res.append((segid, text))
     return res
 
@@ -47,7 +50,46 @@ def write_anchor_dump(anchor_segs, aligned_ratio, output):
             print("ops\t" + "\t".join(seg["ops"]), file=f)
 
 
+def write_anchor_seg(anchor_segs, seg_info, output, format):
+    """
+    Write the determined anchors into a segments file.
+    """
+    res = {}
+    if format == "json":
+        for anchor in anchor_segs:
+            res[anchor["segid"]] = seg_info[anchor["segid"]]
+        with open(output, "w") as f:
+            json.dump(res, f)
+    elif format == "kaldi":
+        raise NotImplementedError
+    else:
+        raise ValueError(f"Unsupport segmentation file format {format}")
+
+
+def write_text(anchor_segs, output, eps):
+    """
+    Write the determined anchors into a segments file.
+    """
+    with open(output, "w") as f:
+        for anchor in anchor_segs:
+            ref = [char for char in anchor['ref'] if char != eps]
+            scp = " ".join(ref)
+            print(f"{anchor['segid']} {scp}", file=f)
+
+
 def seg_align(key_file, output_dir, clip_info, eps):
+    """
+    Perform the audio-text alignment based on the (segmented-decoded) text2text alignment result.
+    """
+    # Read the "<uttid> <clip_info_filepath>" key file (either kaldi style or json)
+    uttid2clip = {}
+    with open(clip_info, "r") as f:
+        for line in f:
+            clip_uttid, clip_fp = line.strip().split(" ")
+            uttid2clip[clip_uttid] = clip_fp
+    seg_format = "json" if uttid2clip[list(uttid2clip.keys())[0]].endswith(
+        ".json") else "kaldi"
+
     with open(key_file, "r") as f:
         for line in f:
             anchor_segs = []
@@ -67,11 +109,11 @@ def seg_align(key_file, output_dir, clip_info, eps):
 
                 window.append(char)
                 window_idx.append(i)
-                # A full segment in hyp is scanned
+                # A full segment in hyp is scanned and matched up with the VAD-segmented text
                 if window == curr_seg_text:
                     ref_tokens = [ref[idx] for idx in window_idx]
                     seg_ops = [op[idx] for idx in window_idx]
-                    # Mark as anchor only if the current segments satisfies certain conditions
+                    # A hyp segment is marked as an anchor only if the current segments satisfies certain conditions
                     if satisfy_match_conditions(window, ref_tokens, seg_ops):
                         aligned_text_len += len(
                             [token for token in ref_tokens if token != eps])
@@ -82,12 +124,26 @@ def seg_align(key_file, output_dir, clip_info, eps):
                         curr_seg_text = seg_text[seg_idx][1].strip().split(" ")
                         curr_segid = seg_text[seg_idx][0]
                         window, window_idx = [], []
+
             uttid = Path(anchor_file).stem
             utt_dir = os.path.join(output_dir, uttid)
             mkdir_if_not_exist(utt_dir)
             ref_text_len = len([token for token in ref if token != eps])
             write_anchor_dump(anchor_segs=anchor_segs, aligned_ratio=aligned_text_len / ref_text_len,
                               output=os.path.join(utt_dir, "seg.dump"))
+
+            # Read the timestamp information from the VAD-generated segmentation file
+            with open(uttid2clip[uttid], "r") as sf:
+                seg_info = json.load(
+                    sf) if seg_format == "json" else parse_segments_file(sf)
+            # Generate the segmentation file (in the same format as the clip_info file)
+            of = os.path.join(utt_dir, f"{uttid}.json") if seg_format == "json" else os.path.join(
+                utt_dir, "segments")
+            write_anchor_seg(anchor_segs=anchor_segs,
+                             seg_info=seg_info,
+                             output=of, format=seg_format)
+            write_text(anchor_segs=anchor_segs,
+                       output=os.path.join(utt_dir, f"text"), eps=eps)
 
 
 def main():

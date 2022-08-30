@@ -17,8 +17,8 @@ def read_segment_file(input_filename):
     return res
 
 
-def clip_single_audio(segid, uttid, start, end, audio, output_dir):
-    out_fname = "_".join([uttid, segid + ".wav"])
+def clip_single_audio(segid, start, end, audio, output_dir):
+    out_fname = segid + ".wav"
     audio_clip = audio[start * 1000: end * 1000]
     audio_clip.export(os.path.join(output_dir, out_fname), format="wav")
 

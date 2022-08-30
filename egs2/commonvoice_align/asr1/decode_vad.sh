@@ -78,7 +78,7 @@ bpe_nlsyms=         # non-linguistic symbols list, separated by a comma, for BPE
 bpe_char_cover=1.0  # character coverage when modeling BPE
 
 # Ngram model related
-use_ngram=false
+use_ngram=true
 ngram_exp=
 ngram_num=3
 
@@ -128,7 +128,7 @@ use_streaming=false # Whether to use streaming decoding
 
 use_maskctc=false # Whether to use maskctc decoding
 
-batch_size=1
+batch_size=2
 inference_tag=    # Suffix to the result dir for decoding.
 inference_config= # Config for decoding.
 inference_args=   # Arguments for decoding, e.g., "--lm_weight 0.1".
@@ -461,15 +461,21 @@ fi
 # ========================== Main stages start from here. ==========================
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     log "Stage 1: Run VAD on the original data."
-    # echo ${vad_data_dir}
     mkdir -p $vad_data_dir/decode
-    ${python} local/vad.py --input_dir $input_audio_dir --output_dir $vad_data_dir/decode --fs 16000 --clip
+    ${python} local/vad.py \
+        --input_dir $input_audio_dir \
+        --output_dir $vad_data_dir/decode \
+        --fs 16000 \
+        --clip
 fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     log "Stage 2: Data preparation for decoding."
     # [Task dependent] Need to create data.sh for new corpus
-    local/data_vad_decode.sh --lang ${lang} --local_data_dir ${vad_data_dir} --txt_data_dir ${input_text_dir}
+    local/data_vad_decode.sh \
+        --lang ${lang} \
+        --local_data_dir ${vad_data_dir} \
+        --txt_data_dir ${input_text_dir}
 fi
 
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
@@ -517,10 +523,13 @@ if ! "${skip_lm_train}" && "${use_special_lm}"; then
     lm_stats_dir=${lm_stats_dir}_special
 
     if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
+        log "Generate LM training text for each utterance"
         mkdir -p data/lm_train;
         for dset in ${test_sets}; do
             # Generate lm_train.txt for each utterance
-            ${python} local/generate_lm_train_text.py --text_map data/${dset}/text_map --output_dir data/lm_train
+            ${python} local/generate_lm_train_text.py \
+                --text_map data/${dset}/text_map \
+                --output_dir data/lm_train
         done
     fi
 
@@ -572,7 +581,7 @@ if ! "${skip_lm_train}" && "${use_special_lm}"; then
         # fi
     # fi
 
-    if [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
+    if "${use_lm}" && [ ${stage} -le 6 ] && [ ${stop_stage} -ge 6 ]; then
         log "Stage 6: LM collect stats"
 
         # 1. Split the key file
@@ -655,8 +664,8 @@ if ! "${skip_lm_train}" && "${use_special_lm}"; then
         done
     fi
 
-    if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
-        log "Stage 7: LM Training"
+    if "${use_lm}" && [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
+        log "Stage 7-1: LM Training"
 
         for dir in data/lm_train/*; do
             _opts=
@@ -734,10 +743,10 @@ if ! "${skip_lm_train}" && "${use_special_lm}"; then
                     --resume true \
                     --output_dir "${lm_exp}/${uttid}" \
                     ${_opts} ${lm_args}
-        done 
+        done
     fi
 
-    if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
+    if "${use_lm}" && [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
         log "Stage 8: Calc perplexity"
         _opts=
         for dir in data/lm_train/*; do
@@ -756,12 +765,30 @@ if ! "${skip_lm_train}" && "${use_special_lm}"; then
             log "PPL: ${lm_trn_txt}: $(cat ${lm_exp}/${uttid}/perplexity_test/ppl)"
         done
     fi
+
+    if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
+        if "${use_ngram}"; then
+            echo $PATH
+            # Note that ngram language models need the installation of kenlm
+            log "Stage 9: Ngram Training"
+            for dir in data/lm_train/*; do
+                uttid=${dir##*/}
+                lm_trn_txt=data/lm_train/${uttid}/"lm_train.txt"
+                ngram_dir=${ngram_exp}/${uttid}
+                mkdir -p ${ngram_dir}
+                cut -f 2- -d " " ${lm_trn_txt} | lmplz -S "20%" --discount_fallback -o ${ngram_num} - >${ngram_dir}/${ngram_num}gram.arpa
+                build_binary -s ${ngram_dir}/${ngram_num}gram.arpa ${ngram_dir}/${ngram_num}gram.bin
+            done
+        else
+            log "Stage 9: Skip ngram stages: use_ngram=${use_ngram}"
+        fi
+    fi
 else
     log "LM training skipped, using general LM for decoding..."
 fi
 
-if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
-    log "Stage 9: Decoding: decode_dir=${asr_exp}"
+if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
+    log "Stage 10: Decoding: decode_dir=${asr_exp}"
 
     if ${gpu_inference}; then
         _cmd="${cuda_cmd}"
@@ -874,9 +901,11 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
         dset=decode
         _data="${data_feats}/${dset}"
         # Generate separate wav.scp files
+        rm -rf ${_data}/splitted/*
         mkdir -p ${_data}/splitted
-        rm -r ${_data}/splitted/*
-        ${python} local/split_scp_files.py --input ${_data}/wav.scp --output_dir ${_data}/splitted
+        ${python} local/split_scp_files.py \
+            --input ${_data}/wav.scp \
+            --output_dir ${_data}/splitted
 
         for dir in ${_data}/splitted/*; do
             uttid=${dir##*/}
@@ -886,12 +915,14 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
                 _opts+="--config ${inference_config} "
             fi
 
-            if "${use_word_lm}"; then
-                _opts+="--word_lm_train_config ${lm_exp}/${uttid}/config.yaml "
-                _opts+="--word_lm_file ${lm_exp}/${uttid}/${inference_lm} "
-            else
-                _opts+="--lm_train_config ${lm_exp}/${uttid}/config.yaml "
-                _opts+="--lm_file ${lm_exp}/${uttid}/${inference_lm} "
+            if "${use_lm}"; then
+                if "${use_word_lm}"; then
+                    _opts+="--word_lm_train_config ${lm_exp}/${uttid}/config.yaml "
+                    _opts+="--word_lm_file ${lm_exp}/${uttid}/${inference_lm} "
+                else
+                    _opts+="--lm_train_config ${lm_exp}/${uttid}/config.yaml "
+                    _opts+="--lm_file ${lm_exp}/${uttid}/${inference_lm} "
+                fi
             fi
             
             if "${use_ngram}"; then
@@ -980,26 +1011,32 @@ if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
     fi
 fi
 
-if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
-    log "Stage 10: Merge decoded text for each utterance."
+if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
+    log "Stage 11: Merge decoded text for each utterance."
     
     dset=decode
     decoded_dir="${asr_exp}/${inference_tag}/${dset}"
     if ! "${use_special_lm}"; then
         _dir="${asr_exp}/${inference_tag}/${dset}"
         mkdir -p ${_dir}/merged; rm ${_dir}/merged/*.txt
-        ${python} local/merge_txt.py --input ${_dir}/text --output_dir ${_dir}/merged --decode
+        ${python} local/merge_txt.py \
+            --input ${_dir}/text \
+            --output_dir ${_dir}/merged \
+            --decode
     else
         for dir in ${decoded_dir}/*; do
             uttid="${dir##*/}"
             mkdir -p "${dir}/merged"; rm -f "${dir}/merged"/*.txt
-            ${python} local/merge_txt.py --input "${dir}"/text --output_dir "${dir}"/merged --decode
+            ${python} local/merge_txt.py \
+                --input "${dir}"/text \
+                --output_dir "${dir}"/merged \
+                --decode
         done
     fi
 fi
 
-if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
-    log "Stage 11: Compute the Levenshtein distance of the decoded text and the groud-truth text."
+if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
+    log "Stage 12: Compute the Levenshtein distance of the decoded text and the groud-truth text."
     dset=decode
     decoded_dir="${asr_exp}/${inference_tag}/${dset}"
     raw_anchor_dir="${align_dir}/anchors/raw"
@@ -1084,8 +1121,8 @@ if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
     fi
 fi
 
-if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
-    log "Stage 12: Prepare the data for segmentation."
+if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
+    log "Stage 13: Prepare the data for segmentation."
     dset=decode
     char_anchor_dir=${align_dir}/anchors/raw/char
     mkdir -p ${align_dir}/anchors/keys
@@ -1111,8 +1148,8 @@ if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
         --input_format ${seg_file_format}
 fi
 
-if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
-    log "Stage 13: Determine each VAD segment's corresponding ground-truth text."
+if [ ${stage} -le 14 ] && [ ${stop_stage} -ge 14 ]; then
+    log "Stage 14: Determine each VAD segment's corresponding ground-truth text."
     key_file=${align_dir}/anchors/keys/anchors.scp
     clip_info=${align_dir}/anchors/keys/clip_info
     mkdir -p ${align_dir}/anchors/outputs
@@ -1120,7 +1157,7 @@ if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
     ${python} local/seg_align.py \
         --key_file ${key_file} \
         --output_dir ${align_dir}/anchors/outputs \
-        --clip_info_file ${clip_info} \
+        --clip_info ${clip_info} \
         --eps "${eps}"
 fi
 
