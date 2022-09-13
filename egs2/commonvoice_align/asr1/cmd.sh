@@ -26,7 +26,6 @@
 #   "Parallelization in Kaldi": http://kaldi-asr.org/doc/queue.html
 # =========================================================~
 
-
 # Select the backend used by run.sh from "local", "stdout", "sge", "slurm", or "ssh"
 cmd_backend='jhu'
 
@@ -50,7 +49,6 @@ elif [ "${cmd_backend}" = stdout ]; then
     # Used for "*_recog.py"
     export decode_cmd="stdout.pl"
 
-
 # "qsub" (Sun Grid Engine, or derivation of it)
 elif [ "${cmd_backend}" = sge ]; then
     # The default setting is written in conf/queue.conf.
@@ -62,7 +60,6 @@ elif [ "${cmd_backend}" = sge ]; then
     export cuda_cmd="queue.pl"
     export decode_cmd="queue.pl"
 
-
 # "qsub" (Torque/PBS.)
 elif [ "${cmd_backend}" = pbs ]; then
     # The default setting is written in conf/pbs.conf.
@@ -70,7 +67,6 @@ elif [ "${cmd_backend}" = pbs ]; then
     export train_cmd="pbs.pl"
     export cuda_cmd="pbs.pl"
     export decode_cmd="pbs.pl"
-
 
 # "sbatch" (Slurm)
 elif [ "${cmd_backend}" = slurm ]; then

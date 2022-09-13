@@ -45,7 +45,7 @@ fi
     --asr_tag  "decode_vad" \
     --asr_model_dir ${asr_model_dir} \
     --lm_tag ${lm_tag} \
-    --inference_nj 4 \
+    --inference_nj 2 \
     --phoneme_align true \
     --stage 13 \
     --stop_stage 14
@@ -65,7 +65,7 @@ fi
 #     --asr_tag  "decode_vad" \
 #     --asr_model_dir ${asr_model_dir} \
 #     --lm_exp ${lm_exp} \
-#     --inference_nj 4 \
+#     --inference_nj 2 \
 #     --skip_lm_train true \
 #     --use_special_lm false \
 #     --phoneme_align true \

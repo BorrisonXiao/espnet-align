@@ -14,7 +14,6 @@ def eliminate_tone(scp_phoneme):
     Remove the trailing numbers representing tone information.
     e.g. "ji5" => "ji"
     """
-    # res = re.sub(r"([a-z])\d", r"\1", scp_phoneme)
     return re.sub(r"([a-z])\d", r"\1", scp_phoneme)
 
 
@@ -39,7 +38,7 @@ def prep_txt(decoded_dir, text_map, output_dir, integerize=False, use_phoneme=Fa
         with open(scps[uttid], "r") as f:
             scp = f.read()
             # Merge instances such as "1980 年" to "1980年" for better an2cn conversion
-            scp = re.sub(r"(\d)\s年", r"\1年", scp)
+            scp = re.sub(r"(\d\d\d\d)\s年", r"\1年", scp)
             # Convert the numbers into characters and insert the spaces properly
             scp = text_char_seg(cn2an.transform(scp, "an2cn"))
 

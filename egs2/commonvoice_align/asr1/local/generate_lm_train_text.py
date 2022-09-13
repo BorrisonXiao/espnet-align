@@ -2,6 +2,9 @@ import argparse
 import os
 from pathlib import Path
 from utils import mkdir_if_not_exist
+import cn2an
+import re
+from seg2text import text_char_seg
 
 
 def generate_text(text_map, output_dir):
@@ -11,6 +14,10 @@ def generate_text(text_map, output_dir):
 
             with open(txt_path, "r") as fp:
                 text = fp.read()
+
+            text = re.sub(r"(\d\d\d\d)\s年", r"\1年", text)
+            # Convert the numbers into characters and insert the spaces properly
+            text = text_char_seg(cn2an.transform(text, "an2cn"))
 
             txt_dir = os.path.join(output_dir, uttid)
             mkdir_if_not_exist(txt_dir)

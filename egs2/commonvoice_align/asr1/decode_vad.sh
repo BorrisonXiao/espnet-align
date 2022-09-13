@@ -975,7 +975,7 @@ if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
                 # Now only _nj=1 is verified if using k2
                 _nj=1
             else
-                _nj=$(min "${inference_nj}" "$(<${key_file} wc -l)" "${_ngpu}")
+                _nj=$(min "${inference_nj}" "$(<${key_file} wc -l)")
             fi
 
             for n in $(seq "${_nj}"); do

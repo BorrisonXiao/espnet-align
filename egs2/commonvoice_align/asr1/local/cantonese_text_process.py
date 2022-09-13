@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from utils import mkdir_if_not_exist
 
-chinese_punc = re.compile(r'\！|\？|\。|\＂|\＃|\＄|\％|\＆|\＇|\（|\）|\＊|\＋|\，|\－|\／|\：|\︰|\；|\＜|\＝|\＞|\＠|\［|\＼|\］|\＾|\＿|\｀|\｛|\｜|\｝|\～|\｟|\｠|\｢|\｣|\､|\〃|\《|\》|\》|\「|\」|\『|\』|\【|\】|\〔|\〕|\〖|\〗|\〘|\〙|\〚|\〛|\〜|\〝|\〞|\〟|\〰|\〾|\〿|\–—|\|\‘|\’|\‛|\“|\”|\"|\„|\‟|\…|\‧|\﹏|\、|\,|\.|\:|\?')
+chinese_punc = re.compile(r'\!|\;|\~|\！|\？|\。|\＂|\＃|\＄|\％|\＆|\＇|\（|\）|\＊|\＋|\，|\－|\／|\：|\︰|\；|\＜|\＝|\＞|\＠|\［|\＼|\］|\＾|\＿|\｀|\｛|\｜|\｝|\～|\｟|\｠|\｢|\｣|\､|\〃|\《|\》|\》|\「|\」|\『|\』|\【|\】|\〔|\〕|\〖|\〗|\〘|\〙|\〚|\〛|\〜|\〝|\〞|\〟|\〰|\〾|\〿|\–—|\|\‘|\’|\‛|\“|\”|\"|\„|\‟|\…|\‧|\﹏|\、|\,|\.|\:|\?')
 
 
 def clean_hklegco_text(input_dir, output_dir, use_jieba=False):
@@ -28,28 +28,45 @@ def clean_hklegco_text(input_dir, output_dir, use_jieba=False):
     mkdir_if_not_exist(dump_dir)
 
     with open(text_map, "w") as ofh:
-        for txt_f in os.listdir(input_dir):
-            uttid = Path(txt_f).stem
-            full_path = os.path.join(input_dir, txt_f)
+        for mid in os.listdir(input_dir):
+            mid_dir = os.path.join(input_dir, mid)
+            for txt_f in os.listdir(mid_dir):
+                uttid = Path(txt_f).stem
+                full_path = os.path.join(mid_dir, txt_f)
 
-            # TODO: Parallelize the re-tokenization process if needed
-            with open(full_path, 'r', encoding='utf-8') as fhd:
-                output_path = os.path.join(dump_dir, uttid + ".txt")
-                with open(output_path, "w") as f:
-                    for i, line in enumerate(fhd):
-                        if line:
-                            text = re.subn(chinese_punc, '', line.strip())[0]
-                            if use_jieba:
-                                text = ' '.join(jieba.cut(text, cut_all=False))
-                                res = " " + text if i > 0 else text
-                            else:
-                                res = " " + \
-                                    text_char_seg(
-                                        text) if i > 0 else text_char_seg(text)
+                # TODO: Parallelize the re-tokenization process if needed
+                with open(full_path, 'r', encoding='utf-8') as fhd:
+                    output_path = os.path.join(dump_dir, uttid + ".txt")
+                    with open(output_path, "w") as f:
+                        for i, line in enumerate(fhd):
+                            if line:
+                                text = re.subn(chinese_punc, '', line.strip())[0]
+                                if use_jieba:
+                                    text = ' '.join(jieba.cut(text, cut_all=False))
+                                    res = " " + text if i > 0 else text
+                                else:
+                                    res = " " + \
+                                        text_char_seg(
+                                            text) if i > 0 else text_char_seg(text)
 
-                            print(res, file=f, end="")
+                                print(res, file=f, end="")
 
-            print(f"{uttid} {output_path}", file=ofh)
+                print(f"{uttid} {output_path}", file=ofh)
+
+
+def clean_cv_text(input_filename, output_filename, use_jieba=False):
+    ofh = open(output_filename, 'w', encoding='utf-8')
+    with open(input_filename, 'r', encoding='utf-8') as fhd:
+        for line in fhd:
+            uttid, text = line.split(sep=" ", maxsplit=1)
+            if text:
+                if use_jieba:
+                    text = ' '.join(jieba.cut(text, cut_all=False))
+
+                text = re.subn(chinese_punc, '', text.strip())[0]
+                res = text_char_seg(text)
+                print(f"{uttid} {res}", file=ofh)
+    ofh.close()
 
 
 def main():
@@ -61,9 +78,14 @@ def main():
                         help='The full path to the directory in which tokenized text files are stored and a text_map file')
     parser.add_argument('--use_jieba', action='store_true',
                         help='If option provided, use jieba to segment the text else space-delimited tokenization')
+    parser.add_argument('--commonvoice', action='store_true',
+                        help='If option provided, perform text process on the commonvoice dataset')
     args = parser.parse_args()
 
-    clean_hklegco_text(args.input_dir, args.output_dir, use_jieba=args.use_jieba)
+    if args.commonvoice:
+        clean_cv_text(args.input_dir, args.output_dir, use_jieba=args.use_jieba)
+    else:
+        clean_hklegco_text(args.input_dir, args.output_dir, use_jieba=args.use_jieba)
 
 
 if __name__ == "__main__":
