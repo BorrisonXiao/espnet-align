@@ -68,7 +68,11 @@ fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then 
     log "stage3: Segment data using char/jieba"
-    local/prepare_cv_text.sh --dir data
+
+    for dset in "train" "test" "dev" "validated"; do
+        mv "data/${dset}_zh_HK/text" "data/${dset}_zh_HK/text.raw"
+        python local/cantonese_text_process.py --input "data/${dset}_zh_HK/text.raw" --output "data/${dset}_zh_HK/text" --commonvoice
+    done
 fi
 
 log "Successfully finished. [elapsed=${SECONDS}s]"

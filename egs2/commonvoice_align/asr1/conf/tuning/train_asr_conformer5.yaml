@@ -43,7 +43,7 @@ model_conf:
 optim: adam
 accum_grad: 1
 grad_clip: 3
-max_epoch: 42
+max_epoch: 39
 optim_conf:
     lr: 4.0
 scheduler: noamlr
@@ -53,7 +53,7 @@ scheduler_conf:
 
 # minibatch related
 batch_type: numel
-batch_bins: 20000000
+batch_bins: 10000000
 
 best_model_criterion:
 -   - valid

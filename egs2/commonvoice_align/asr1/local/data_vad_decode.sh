@@ -16,7 +16,7 @@ python=python3
 local_data_dir=
 txt_data_dir=
 dst=data/decode
-mkdir -p $dst
+kaldi_style=false
 
 . utils/parse_options.sh || exit 1;
 
@@ -33,20 +33,33 @@ set -o pipefail
 
 log "data preparation started"
 
+mkdir -p ${dst}
+
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     log "stage1: Preparing post-vad hklegco data"
+    _opts=
+    if "${kaldi_style}"; then
+        _opts+="--segments_output ${dst}/segments.unsorted "
+    fi
     
     ${python} local/decode_data_prep.py \
         --data_dir ${local_data_dir}/decode \
-        --output $dst/wav.scp.unsorted \
-        --utt2spk_output $dst/utt2spk.unsorted
-    sort -o $dst/utt2spk $dst/utt2spk.unsorted
-    rm $dst/utt2spk.unsorted
-    sort -o $dst/wav.scp $dst/wav.scp.unsorted
-    rm $dst/wav.scp.unsorted
+        --output ${dst}/wav.scp.unsorted \
+        --utt2spk_output ${dst}/utt2spk.unsorted \
+        ${_opts}
 
-    spk2utt=$dst/spk2utt
-    utils/utt2spk_to_spk2utt.pl <$dst/utt2spk >$spk2utt || exit 1
+    for file in "utt2spk" "wav.scp"; do
+        sort -o ${dst}/${file} ${dst}/${file}.unsorted
+        rm ${dst}/${file}.unsorted
+    done
+
+    if "${kaldi_style}"; then
+        sort -o ${dst}/segments ${dst}/segments.unsorted
+        rm ${dst}/segments.unsorted
+    fi
+
+    spk2utt=${dst}/spk2utt
+    utils/utt2spk_to_spk2utt.pl <${dst}/utt2spk >${spk2utt} || exit 1
 fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then 
