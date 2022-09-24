@@ -2,7 +2,7 @@ import argparse
 import os
 from pathlib import Path
 import json
-from utils import mkdir_if_not_exist, read_anchor_file, parse_segments_file
+from utils import mkdir_if_not_exist, read_anchor_file, parse_segments_file, segid2uttid
 
 
 def read_seg_text(file):
@@ -61,7 +61,11 @@ def write_anchor_seg(anchor_segs, seg_info, output, format):
         with open(output, "w") as f:
             json.dump(res, f)
     elif format == "kaldi":
-        raise NotImplementedError
+        with open(output, "w") as f:
+            for anchor in anchor_segs:
+                uttid = segid2uttid(anchor["segid"])
+                print(
+                    f"{anchor['segid']} {uttid} {seg_info[anchor['segid']]['start']} {seg_info[anchor['segid']]['end']}", file=f)
     else:
         raise ValueError(f"Unsupport segmentation file format {format}")
 
@@ -94,7 +98,7 @@ def seg_align(key_file, output_dir, clip_info, eps):
         for line in f:
             anchor_segs = []
             anchor_file, text_file = line.strip().split(" ")
-            ref, hyp, op, csid = read_anchor_file(anchor_file)
+            fname, ref, hyp, op, csid = read_anchor_file(anchor_file)
             seg_text = read_seg_text(text_file)
 
             seg_idx = 0
@@ -125,7 +129,7 @@ def seg_align(key_file, output_dir, clip_info, eps):
                         curr_segid = seg_text[seg_idx][0]
                         window, window_idx = [], []
 
-            uttid = Path(anchor_file).stem
+            uttid, scpid = fname.split("_vs_")
             utt_dir = os.path.join(output_dir, uttid)
             mkdir_if_not_exist(utt_dir)
             ref_text_len = len([token for token in ref if token != eps])

@@ -45,6 +45,7 @@ egs*/*/*/.cache*
 egs*/*/*/pretrained_models*
 egs*/fisher_callhome_spanish/*/local/mapping*
 egs*/*/*/pre_train_exp
+egs*/*/*/align_exp
 
 # tools related
 tools/chainer

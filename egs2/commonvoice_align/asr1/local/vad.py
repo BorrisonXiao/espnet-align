@@ -15,7 +15,7 @@ punc = re.compile(r'\(|\)|\！|\？|\。|\＂|\＃|\＄|\％|\＆|\＇|\（|\）
 def labels2sec(labels, fs, uttid):
     res = {}
     for i, label in enumerate(labels):
-        res[f"{uttid}_seg{i+1:03}"] = {"start": label["start"]
+        res[f"{uttid}_seg{i+1:04}"] = {"start": label["start"]
                                        / fs, "end": label["end"] / fs}
 
     return res
