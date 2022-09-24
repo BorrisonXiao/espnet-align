@@ -11,13 +11,16 @@ def clear_buffer(buffer, output_dir):
         merged_fname = os.path.join(output_dir, uttid + ".txt")
         if os.path.exists(merged_fname):
             with open(merged_fname, "a") as ofh:
-                ofh.write(" " + txt)
+                ofh.write("\n" + txt)
         else:
             with open(merged_fname, "a") as ofh:
                 ofh.write(txt)
 
 
 def merge_decode_text(input, output_dir, max_line_cache=1000):
+    """
+    For each segment, the text is written into their corresponding uttid file.
+    """
     with open(input, "r", encoding='utf-8') as f:
         buffer = {}
         counter = 0
@@ -27,8 +30,12 @@ def merge_decode_text(input, output_dir, max_line_cache=1000):
                 continue
             segid, text = splitted
             uttid = segid2uttid(segid)
-            buffer[uttid] = text if uttid not in buffer else " ".join(
-                [buffer[uttid], text])
+            if uttid in buffer:
+                buffer[uttid] += f"\n{segid} {text}"
+            else:
+                buffer[uttid] = f"{segid} {text}"
+            # buffer[uttid] = text if uttid not in buffer else " ".join(
+            #     [buffer[uttid], text])
             counter += 1
 
             # Clear buffer and write to file

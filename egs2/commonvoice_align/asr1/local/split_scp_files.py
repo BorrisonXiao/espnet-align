@@ -1,17 +1,13 @@
 import argparse
 import os
 from pathlib import Path
-
-
-def mkdir_if_not_exist(path):
-    Path(path).mkdir(parents=True, exist_ok=True)
-
-
-def segid2uttid(segid):
-    return "_".join(segid.split("_")[:-1])
+from utils import mkdir_if_not_exist, segid2uttid
 
 
 def split_scps(scp, output_dir):
+    """
+    Extract and form each utterance's wav.scp from the comprehensive wav.scp.
+    """
     with open(scp, "r") as f:
         for line in f:
             segid, wav_path = line.strip().split(" ", maxsplit=1)
@@ -27,7 +23,7 @@ def split_scps(scp, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Generate text files for each utterance that will be aligned.')
+        description='Generate the wav.scp file for each utterance that will be aligned.')
     parser.add_argument('--input', type=Path, required=True,
                         help='The full path to the wav.scp file')
     parser.add_argument('--output_dir', type=Path, required=True,

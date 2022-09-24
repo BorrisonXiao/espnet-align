@@ -14,7 +14,7 @@ asr_lm_config=conf/train_lm.yaml
 lm_config_small=conf/train_lm_small.yaml
 inference_config=conf/decode_ngram.yaml
 asr_inference_config=conf/decode_asr.yaml
-asr_model_dir=pretrain_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
+asr_model_dir=pre_train_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
 
 lm_exp=exp/lm_train_lm_zh-HK_word
 lm_tag=biased
@@ -45,13 +45,14 @@ fi
   --asr_exp ${asr_model_dir} \
   --expdir align_exp \
   --lm_tag ${lm_tag} \
-  --inference_nj 4 \
+  --inference_nj 32 \
   --phoneme_align true \
   --pretrain_asr true \
   --asr_lm_config ${asr_lm_config} \
   --asr_inference_config ${asr_inference_config} \
-  --stage 7 \
-  --stop_stage 10
+  --heuristic_search false \
+  --stage 17 \
+  --stop_stage 17
 
 # ./align.sh \
 #     --ngpu 2 \
