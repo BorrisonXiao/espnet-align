@@ -5,19 +5,18 @@ set -e
 set -u
 set -o pipefail
 
-lang=zh-HK # en de fr cy tt kab ca zh-TW it fa eu es ru tr nl eo zh-CN rw pt zh-HK cs pl uk
-
+lang=zh-HK
 test_set="decode"
 
 asr_config=conf/tuning/train_asr_conformer5.yaml
 asr_lm_config=conf/train_lm.yaml
-lm_config_small=conf/train_lm_small.yaml
 inference_config=conf/decode_ngram.yaml
 asr_inference_config=conf/decode_asr.yaml
 asr_model_dir=pre_train_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
-
-lm_exp=exp/lm_train_lm_zh-HK_word
+finetune_asr_config=conf/tuning/finetune_asr_conformer5.yaml
 lm_tag=biased
+
+input_text_dir="/home/cxiao7/research/speech2text/align_data_v1/processed/txt"
 
 if [[ "${lang}" == *"zh"* ]]; then
   nbpe=2500
@@ -32,6 +31,7 @@ fi
 # Command for training ASR
 ./align.sh \
   --ngpu 2 \
+  --nj 64 \
   --lang "${lang}" \
   --use_lm false \
   --token_type word \
@@ -45,12 +45,15 @@ fi
   --asr_exp ${asr_model_dir} \
   --expdir align_exp \
   --lm_tag ${lm_tag} \
-  --inference_nj 32 \
+  --inference_nj 64 \
   --phoneme_align true \
   --pretrain_asr true \
   --asr_lm_config ${asr_lm_config} \
   --asr_inference_config ${asr_inference_config} \
   --heuristic_search false \
+  --finetune_asr_config ${finetune_asr_config} \
+  --input_text_dir ${input_text_dir} \
+  --compute_primary_stats true \
   --stage 17 \
   --stop_stage 17
 

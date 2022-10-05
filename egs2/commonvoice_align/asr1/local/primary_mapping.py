@@ -19,6 +19,7 @@ def primary_mapping(aligned_dir, output_dir):
         hyp, ref = Path(fname).stem.split("_vs_")
         csid = [int(item) for item in _csid]
         c = csid[0]
+        # TODO: Perhaps the absolute count of C is not the best criterion
         if hyp not in hyp_res or hyp_res[hyp][1][0] < c:
             hyp_res[hyp] = (ref, csid)
         if ref not in ref_res or ref_res[ref][1][0] < c:

@@ -5,4 +5,4 @@ maxlenratio: 0.0
 minlenratio: 0.0
 ctc_weight: 0.5
 lm_weight: 0.1
-ngram_weight: 0.9
+ngram_weight: 0.5

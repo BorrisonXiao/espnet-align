@@ -24,7 +24,7 @@ SECONDS=0
 
 # General
 vad_data_dir=data/vad
-input_text_dir="/home/cxiao7/research/speech2text/align_data_v0/processed/txt"
+input_text_dir="/home/cxiao7/research/speech2text/align_data_v1/processed/txt"
 input_audio_dir="/home/cxiao7/research/speech2text/align_data_v0/processed/audio"
 skip_lm_train=false
 seg_file_format="kaldi" # Segment file format: "json", "kaldi"
@@ -32,14 +32,15 @@ pretrain_asr=false
 vad_nj=16
 vad_mthread=2
 
-# Bootstrapping realted
-max_iter=1
+# Bootstrapping related
+max_finetune_iter=1
+finetune_asr_config=
 
 # Pre-train related
 asr_inference_config=
 asr_lm_config=
 
-# Alignment-related
+# Alignment related
 use_biased_lm=true
 phoneme_align=false
 ignore_tone=true
@@ -48,6 +49,7 @@ align_exp=
 heuristic_search=true
 wrap_primary_results=true
 wrap_primary_results_norm=true
+compute_primary_stats=true
 
 # General configuration
 stage=1              # Processes starts from the specified stage.
@@ -59,8 +61,8 @@ skip_upload=true     # Skip packing and uploading stages.
 skip_upload_hf=true  # Skip uploading to hugging face stages.
 ngpu=1               # The number of gpus ("0" uses cpu, otherwise use gpu).
 num_nodes=1          # The number of nodes.
-nj=32                # The number of parallel jobs.
-inference_nj=32      # The number of parallel jobs in decoding.
+nj=64                # The number of parallel jobs.
+inference_nj=64      # The number of parallel jobs in decoding.
 gpu_inference=false  # Whether to perform gpu decoding.
 dumpdir=dump         # Directory to dump features.
 expdir=exp           # Directory to save experiments.
@@ -609,7 +611,7 @@ if "${pretrain_asr}"; then
             --lm_config "${asr_lm_config}" \
             --token_type word \
             --feats_type raw \
-            --speed_perturb_factors "0.9 1.0 1.1" \
+            --speed_perturb_factors "${speed_perturb_factors}" \
             --asr_config "${asr_config}" \
             --asr_exp ${asr_exp} \
             --inference_config "${asr_inference_config}" \
@@ -901,8 +903,6 @@ if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
         _opts+="--config ${inference_config} "
     fi
 
-    _data="${data_feats}/decode"
-
     if "${use_ngram}"; then
         _opts+="--inference_ngram ${inference_ngram} "
         _opts+="--ngram_dir ${ngram_exp}/mlevel "
@@ -935,7 +935,7 @@ if [ ${stage} -le 11 ] && [ ${stop_stage} -ge 11 ]; then
 
         # 1. Split the key file
         key_file=${_data}/${_scp}
-        sorted_key_file=${_data}/${_scp}.sorted
+        sorted_key_file=${key_file}.sorted
         split_scps=""
         if "${use_k2}"; then
             # Now only _nj=1 is verified if using k2
@@ -1034,6 +1034,7 @@ if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
     to_align_dir=${_dir}/to_align
     mkdir -p ${to_align_dir}
 
+    # TODO: Perhaps thread this as well
     ${python} local/txt_pre_align.py \
         --decoded_dir ${_dir}/merged \
         --text_map data/${dset}/text_map \
@@ -1058,7 +1059,7 @@ if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
         --to_align_dir ${to_align_dir} \
         --eps "\"${eps}\"" \
         --raw_anchor_dir ${raw_anchor_dir} || {
-        cat $(grep -l -i error "${_logdir}"/align_text.*.log)
+        cat "$(grep -l -i error ${_logdir}/asr_inference.*.log)"
         exit 1
     }
 fi
@@ -1085,10 +1086,12 @@ if [ ${stage} -le 14 ] && [ ${stop_stage} -ge 14 ]; then
         --aligned_dir ${raw_anchor_dir}/char \
         --output_dir ${primary_outputs}
 
-    ${python} local/primary_stats.py \
-        --dump ${primary_outputs}/dump \
-        --groud_truth /home/cxiao7/research/speech2text/align_data_v0/processed/metadata/metadata_map.txt \
-        --stats_dir ${stats_dir}
+    if "${compute_primary_stats}"; then
+        ${python} local/primary_stats.py \
+            --dump ${primary_outputs}/dump \
+            --groud_truth /home/cxiao7/research/speech2text/align_data_v0/processed/metadata/metadata_map.txt \
+            --stats_dir ${stats_dir}
+    fi
 fi
 
 if [ ${stage} -le 15 ] && [ ${stop_stage} -ge 15 ]; then
@@ -1111,7 +1114,7 @@ if [ ${stage} -le 15 ] && [ ${stop_stage} -ge 15 ]; then
         --anchor_dir ${char_anchor_dir} \
         --output ${keys_dir}/anchors.scp
 
-    # Generate the clip_info key file for segmentation
+    # Generate the clip_info key file that maps uttid to its segments file
     ${python} local/generate_clip_info.py \
         --vad_dir ${vad_data_dir}/decode \
         --output ${keys_dir}/clip_info \
@@ -1126,6 +1129,7 @@ if [ ${stage} -le 16 ] && [ ${stop_stage} -ge 16 ]; then
     clip_info=${keys_dir}/clip_info
     mkdir -p ${anchors_dir}/outputs
 
+    # TODO: This can be easily threaded
     ${python} local/seg_align.py \
         --key_file ${key_file} \
         --output_dir ${anchors_dir}/outputs \
@@ -1134,24 +1138,39 @@ if [ ${stage} -le 16 ] && [ ${stop_stage} -ge 16 ]; then
 fi
 
 if [ ${stage} -le 17 ] && [ ${stop_stage} -ge 17 ]; then
-    log "Stage 17: Merge the aligned data portion."
+    log "Stage 17: Wrap the aligned data portion."
     align_outputs_dir=${align_exp}/${inference_tag}/decode/anchors/outputs
-    export_dir=data/aligned_iter_0
-    wav_scp="data/decode/wav.scp"
-    mkdir -p ${export_dir}
+    init_export_dir=data/aligned_iter_0/raw
+    unsegged_wav_scp="data/decode/wav.scp"
+    wav_scp="${data_feats}/decode/wav.scp"
+    mkdir -p ${init_export_dir}
     primary_outputs=${align_exp}/${inference_tag}/decode/primary_outputs
     if "${heuristic_search}"; then
         primary_outputs+="_heuristic"
     fi
 
-    cat ${align_outputs_dir}/*/segments >${export_dir}/segments
-    cat ${align_outputs_dir}/*/text >${export_dir}/text
+    cat ${align_outputs_dir}/*/text >${init_export_dir}/text.raw
 
+    # Generates the wav.scp and utt2spk files while renaming the segids
+    # with the spkid as prefix all related file to comply with kaldi
     ${python} local/filter_aligned_utt.py \
         --scp_map ${primary_outputs}/scp_map \
         --wav_scp ${wav_scp} \
-        --output ${export_dir}/wav.scp \
-        --utt2spk ${export_dir}/utt2spk
+        --output_dir ${init_export_dir}
+    rm -f ${init_export_dir}/text.raw
+
+    sort -o ${init_export_dir}/wav.scp ${init_export_dir}/wav.scp.unsorted
+    rm ${init_export_dir}/wav.scp.unsorted
+    sort -o ${init_export_dir}/utt2spk ${init_export_dir}/utt2spk.unsorted
+    rm ${init_export_dir}/utt2spk.unsorted
+    sort -o ${init_export_dir}/text ${init_export_dir}/text.unsorted
+    rm ${init_export_dir}/text.unsorted
+    utils/utt2spk_to_spk2utt.pl ${init_export_dir}/utt2spk >${init_export_dir}/spk2utt
+    utils/validate_data_dir.sh --no-feats ${init_export_dir} || exit 1
+
+    ${python} local/calc_audio_length.py \
+        --wav_scp ${init_export_dir}/wav.scp \
+        --tag "init_export"
 
     if "${wrap_primary_results}"; then
         _opts=
@@ -1164,19 +1183,67 @@ if [ ${stage} -le 17 ] && [ ${stop_stage} -ge 17 ]; then
         mkdir -p ${wrap_dir}
         ${python} local/wrap_pr_text.py \
             --scp_map ${primary_outputs}/scp_map \
-            --output ${wrap_dir}/text \
-            --utt2spk ${wrap_dir}/utt2spk \
+            --wav_scp ${unsegged_wav_scp} \
+            --output_dir ${wrap_dir} \
             ${_opts}
-        cp ${export_dir}/wav.scp ${wrap_dir}/wav.scp
+
+        sort -o ${wrap_dir}/wav.scp ${wrap_dir}/wav.scp.unsorted
+        rm ${wrap_dir}/wav.scp.unsorted
+        sort -o ${wrap_dir}/text ${wrap_dir}/text.unsorted
+        rm ${wrap_dir}/text.unsorted
+        sort -o ${wrap_dir}/utt2spk ${wrap_dir}/utt2spk.unsorted
+        rm ${wrap_dir}/utt2spk.unsorted
+        utils/utt2spk_to_spk2utt.pl ${wrap_dir}/utt2spk >${wrap_dir}/spk2utt
+        utils/validate_data_dir.sh --no-feats ${wrap_dir} || exit 1
     fi
 fi
 
-if [ ${max_iter} -ge 1 ]; then
-    if [ ${stage} -le 18 ] && [ ${stop_stage} -ge 18 ]; then
-        log "Stage 18: Start bootstrapping for alignment improvement."
+if [ ${stage} -le 18 ] && [ ${stop_stage} -ge 18 ]; then
+    log "Stage 18: Start bootstrapping for alignment improvement."
+    primary_outputs=${align_exp}/${inference_tag}/decode/primary_outputs
+    if "${heuristic_search}"; then
+        primary_outputs+="_heuristic"
     fi
-else
-    log "Bootstrapping skipped, max_iter=${max_iter}..."
+
+    ./finetune.sh \
+        --start_iter 0 \
+        --max_iter ${max_finetune_iter} \
+        --num_nodes ${num_nodes} \
+        --expdir ${expdir} \
+        --ngpu ${ngpu} \
+        --nj ${nj} \
+        --gpu_inference ${gpu_inference} \
+        --inference_config "${inference_config}" \
+        --inference_ngram ${inference_ngram} \
+        --inference_asr_model ${inference_asr_model} \
+        --inference_nj ${inference_nj} \
+        --batch_size ${batch_size} \
+        --decode_dumpdir ${data_feats}/decode \
+        --asr_text_fold_length ${asr_text_fold_length} \
+        --speed_perturb_factors "${speed_perturb_factors}" \
+        --dumpdir ${dumpdir} \
+        --token_type ${token_type} \
+        --feats_type ${feats_type} \
+        --asr_config "${finetune_asr_config}" \
+        --token_list ${token_list} \
+        --pretrained_model "${asr_exp}/${inference_asr_model}" \
+        --ngram_exp "${ngram_exp}" \
+        --scp_map ${primary_outputs}/scp_map \
+        --eps "${eps}" \
+        --phoneme_align ${phoneme_align} \
+        --ignore_tone ${ignore_tone} \
+        --heuristic_search ${heuristic_search} \
+        --text_map data/decode/text_map \
+        --vad_data_dir ${vad_data_dir} \
+        --seg_file_format ${seg_file_format} \
+        --python ${python} \
+        --unsegged_decode_wav_scp "data/decode/wav.scp" \
+        --segged_decode_wav_scp "${data_feats}/decode/wav.scp" \
+        --wrap_primary_results ${wrap_primary_results} \
+        --wrap_primary_results_norm ${wrap_primary_results_norm} \
+        --norm_text_dump "${align_exp}/${inference_tag}/decode/to_align/dump" \
+        --stage 12 \
+        --stop_stage 12
 fi
 
 log "Successfully finished. [elapsed=${SECONDS}s]"
