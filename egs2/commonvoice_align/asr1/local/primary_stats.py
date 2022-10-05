@@ -39,6 +39,9 @@ def compute_stats(dump, groud_truth, stats_dir):
     unkowns = []
     matched_count = 0
     for ref, info in dumpinfo.items():
+        # Skip data without ground-truth
+        if ref not in truth:
+            continue
         if truth[ref] == info['hyp']:
             correct += 1
         else:
@@ -101,6 +104,8 @@ def compute_stats(dump, groud_truth, stats_dir):
     d_correct = 0
     d_errors = []
     for ref, info in dumpinfo.items():
+        if ref not in truth:
+            continue
         if truth[ref] == info['hyp']:
             correct += 1
         else:
