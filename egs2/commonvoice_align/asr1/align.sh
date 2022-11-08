@@ -23,20 +23,23 @@ min() {
 SECONDS=0
 
 # General
+input_text_dir="/home/cxiao7/research/speech2text/align_data_v3/processed/txt"
+input_audio_dir="/home/cxiao7/research/speech2text/align_data_v3/processed/audio"
+
+# VAD related
 vad_data_dir=data/vad
-input_text_dir="/home/cxiao7/research/speech2text/align_data_v1/processed/txt"
-input_audio_dir="/home/cxiao7/research/speech2text/align_data_v0/processed/audio"
-skip_lm_train=false
-seg_file_format="kaldi" # Segment file format: "json", "kaldi"
-pretrain_asr=false
-vad_nj=16
+vad_nj=64
 vad_mthread=2
+seg_file_format="kaldi" # Segment file format: "json", "kaldi"
 
 # Bootstrapping related
 max_finetune_iter=1
 finetune_asr_config=
 
 # Pre-train related
+pretrain_asr=false
+pretrain_exp=pretrain_exp
+skip_lm_train=false
 asr_inference_config=
 asr_lm_config=
 
@@ -67,7 +70,6 @@ gpu_inference=false  # Whether to perform gpu decoding.
 dumpdir=dump         # Directory to dump features.
 expdir=exp           # Directory to save experiments.
 python=python3       # Specify python to execute espnet commands.
-align_dir=
 
 # Data preparation related
 local_data_opts= # The options given to local/data.sh.
@@ -409,9 +411,6 @@ if [ -z "${lm_tag}" ]; then
         lm_tag+="$(echo "${lm_args}" | sed -e "s/--/\_/g" -e "s/[ |=/]//g")"
     fi
 fi
-if [ -z "${align_dir}" ]; then
-    align_dir=${expdir}/align_${asr_tag}_${lm_tag}
-fi
 
 # The directory used for collect-stats mode
 if [ -z "${asr_stats_dir}" ]; then
@@ -573,23 +572,23 @@ if ! "${skip_lm_train}" && "${use_biased_lm}" || "${pretrain_asr}"; then
     if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
         log "Generate LM training text for each utterance"
         mkdir -p data/lm_train/utts
-        rm -r data/lm_train/utts/*
-        for dset in ${test_sets}; do
-            # Generate lm_train.txt for each utterance
-            ${python} local/generate_lm_train_text.py \
-                --text_map data/${dset}/text_map \
-                --output_dir data/lm_train/utts
-        done
+        rm -rf data/lm_train/utts
+        # Generate lm_train.txt for each utterance on sentence level
+        ${python} local/generate_lm_train_text.py \
+            --text_map data/decode/sent_text_map \
+            --output_dir data/lm_train/utts \
+            --sentence
     fi
 
     if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
         if [ "${token_type}" = char ] || [ "${token_type}" = word ]; then
             log "Stage 5: Generate merged lm_train.txt for further tokenization if needed"
 
-            # TODO: Merge target reference text as well as the pre-train text to generate token list
+            # The text will be merged with the pretrain data to form the token list
             ${python} local/merge_lm_train.py \
                 --utts_dir data/lm_train/utts \
-                --output data/lm_train/lm_train.txt
+                --output data/lm_train/lm_train.txt \
+                --sentence
         else
             log "Error: not supported --token_type '${token_type}'"
             exit 2
@@ -607,9 +606,13 @@ if "${pretrain_asr}"; then
         ./pretrain_asr.sh \
             --ngpu "${ngpu}" \
             --lang "${lang}" \
-            --use_lm true \
+            --nj ${nj} \
+            --inference_nj ${inference_nj} \
+            --use_lm false \
+            --use_word_lm false \
+            --use_ngram true \
             --lm_config "${asr_lm_config}" \
-            --token_type word \
+            --token_type phn \
             --feats_type raw \
             --speed_perturb_factors "${speed_perturb_factors}" \
             --asr_config "${asr_config}" \
@@ -619,211 +622,16 @@ if "${pretrain_asr}"; then
             --valid_set "${asr_train_dev}" \
             --test_sets "${asr_test_set}" \
             --lm_train_text "data/${asr_train_set}/text" "$@" \
-            --expdir pre_train_exp \
+            --expdir ${pretrain_exp} \
             --add_token_text data/lm_train/lm_train.txt \
+            --dumpdir ${dumpdir} \
+            --g2p "jyutping" \
             --stage 11 \
             --stop_stage 11
     fi
 fi
 
 if ! "${skip_lm_train}" && "${use_biased_lm}" && [ ${stage} -le 10 ] && [ ${stop_stage} -ge 7 ]; then
-    lm_stats_dir=${lm_stats_dir}_biased
-    if "${use_lm}"; then
-        if [ ${stage} -le 7 ] && [ ${stop_stage} -ge 7 ]; then
-            log "Stage 7: Biased LM collect stats"
-
-            # 1. Split the key file
-            _logdir="${lm_stats_dir}/logdir"
-            mkdir -p "${_logdir}"
-
-            for dir in data/lm_train/*; do
-                # Re-initialize _opts for each lm
-                _opts=
-                if [ -n "${lm_config}" ]; then
-                    # To generate the config file: e.g.
-                    #   % python3 -m espnet2.bin.lm_train --print_config --optim adam
-                    _opts+="--config ${lm_config} "
-                fi
-
-                uttid=${dir##*/}
-                key_file=data/lm_train/${uttid}/"lm_train.txt"
-                mkdir -p ${_logdir}/${uttid}
-
-                # Get the minimum number among ${nj} and the number lines of input files
-                _nj=$(min "${nj}" "$(wc <${key_file} -l)")
-
-                split_scps=""
-                for n in $(seq ${_nj}); do
-                    split_scps+=" ${_logdir}/${uttid}/train.${n}.scp"
-                done
-                # shellcheck disable=SC2086
-                utils/split_scp.pl "${key_file}" ${split_scps}
-
-                # Using training set as dev set to make espnet happy
-                split_scps=""
-                for n in $(seq ${_nj}); do
-                    split_scps+=" ${_logdir}/${uttid}/dev.${n}.scp"
-                done
-                # shellcheck disable=SC2086
-                utils/split_scp.pl "${key_file}" ${split_scps}
-
-                # 2. Generate run.sh
-                log "Generate '${lm_stats_dir}/${uttid}/run.sh'. You can resume the process from stage 7 using this script"
-                mkdir -p "${lm_stats_dir}/${uttid}"
-                echo "${run_args} --stage 7 \"\$@\"; exit \$?" >"${lm_stats_dir}/${uttid}/run.sh"
-                chmod +x "${lm_stats_dir}/${uttid}/run.sh"
-
-                # 3. Submit jobs
-                log "LM collect-stats started... log: '${_logdir}/${uttid}/stats.*.log'"
-                # NOTE: --*_shape_file doesn't require length information if --batch_type=unsorted,
-                #       but it's used only for deciding the sample ids.
-                # shellcheck disable=SC2046,SC2086
-                ${train_cmd} JOB=1:"${_nj}" "${_logdir}"/${uttid}/stats.JOB.log \
-                    ${python} -m espnet2.bin.lm_train \
-                    --collect_stats true \
-                    --use_preprocessor true \
-                    --bpemodel "${bpemodel}" \
-                    --token_type "${lm_token_type}" \
-                    --token_list "${token_list}" \
-                    --non_linguistic_symbols "${nlsyms_txt}" \
-                    --cleaner "${cleaner}" \
-                    --g2p "${g2p}" \
-                    --train_data_path_and_name_and_type "${key_file},text,text" \
-                    --valid_data_path_and_name_and_type "${key_file},text,text" \
-                    --train_shape_file "${_logdir}/${uttid}/train.JOB.scp" \
-                    --valid_shape_file "${_logdir}/${uttid}/dev.JOB.scp" \
-                    --output_dir "${_logdir}/${uttid}/stats.JOB" \
-                    ${_opts} ${lm_args} || {
-                    cat $(grep -l -i error "${_logdir}"/${uttid}/stats.*.log)
-                    exit 1
-                }
-
-                # 4. Aggregate shape files
-                _opts=
-                for i in $(seq "${_nj}"); do
-                    _opts+="--input_dir ${_logdir}/${uttid}/stats.${i} "
-                done
-                # shellcheck disable=SC2086
-                ${python} -m espnet2.bin.aggregate_stats_dirs ${_opts} --output_dir "${lm_stats_dir}/${uttid}"
-
-                # Append the num-tokens at the last dimensions. This is used for batch-bins count
-                awk <"${lm_stats_dir}/${uttid}/train/text_shape" \
-                    -v N="$(wc <${token_list} -l)" '{ print $0 "," N }' \
-                    >"${lm_stats_dir}/${uttid}/train/text_shape.${lm_token_type}"
-
-                awk <"${lm_stats_dir}/${uttid}/valid/text_shape" \
-                    -v N="$(wc <${token_list} -l)" '{ print $0 "," N }' \
-                    >"${lm_stats_dir}/${uttid}/valid/text_shape.${lm_token_type}"
-            done
-        fi
-
-        if [ ${stage} -le 8 ] && [ ${stop_stage} -ge 8 ]; then
-            log "Stage 8-1: LM Training"
-
-            for dir in data/lm_train/*; do
-                _opts=
-                if [ -n "${lm_config}" ]; then
-                    # To generate the config file: e.g.
-                    #   % python3 -m espnet2.bin.lm_train --print_config --optim adam
-                    _opts+="--config ${lm_config} "
-                fi
-                uttid=${dir##*/}
-                lm_trn_txt=data/lm_train/${uttid}/"lm_train.txt"
-
-                if [ "${num_splits_lm}" -gt 1 ]; then
-                    # If you met a memory error when parsing text files, this option may help you.
-                    # The corpus is split into subsets and each subset is used for training one by one in order,
-                    # so the memory footprint can be limited to the memory required for each dataset.
-
-                    _split_dir="${lm_stats_dir}/${uttid}/splits${num_splits_lm}"
-                    if [ ! -f "${_split_dir}/.done" ]; then
-                        rm -f "${_split_dir}/.done"
-                        ${python} -m espnet2.bin.split_scps \
-                            --scps "${lm_trn_txt}" "${lm_stats_dir}/${uttid}/train/text_shape.${lm_token_type}" \
-                            --num_splits "${num_splits_lm}" \
-                            --output_dir "${_split_dir}"
-                        touch "${_split_dir}/.done"
-                    else
-                        log "${_split_dir}/.done exists. Spliting is skipped"
-                    fi
-
-                    _opts+="--train_data_path_and_name_and_type ${_split_dir}/lm_train.txt,text,text "
-                    _opts+="--train_shape_file ${_split_dir}/text_shape.${lm_token_type} "
-                    _opts+="--multiple_iterator true "
-
-                else
-                    _opts+="--train_data_path_and_name_and_type ${lm_trn_txt},text,text "
-                    _opts+="--train_shape_file ${lm_stats_dir}/${uttid}/train/text_shape.${lm_token_type} "
-                fi
-
-                # NOTE(kamo): --fold_length is used only if --batch_type=folded and it's ignored in the other case
-
-                log "Generate '${lm_exp}/${uttid}/run.sh'. You can resume the process from stage 8 using this script"
-                mkdir -p "${lm_exp}/${uttid}"
-                echo "${run_args} --stage 8 \"\$@\"; exit \$?" >"${lm_exp}/${uttid}/run.sh"
-                chmod +x "${lm_exp}/${uttid}/run.sh"
-
-                log "LM training started... log: '${lm_exp}/${uttid}/train.log'"
-                if echo "${cuda_cmd}" | grep -e queue.pl -e queue-freegpu.pl &>/dev/null; then
-                    # SGE can't include "/" nor "zh-CN" in a job name
-                    IFS='_' read -ra ADDR <<<${uttid}
-                    # The job-id consists of the meeting ID and the metadata-based segment ID
-                    jobname="$(basename ${lm_exp})_${ADDR[1]}_${ADDR[2]}"
-                else
-                    jobname="${lm_exp}/train.log"
-                fi
-
-                _ngpu=1 # Needs only 1 GPU due to the one-line text training data
-
-                # shellcheck disable=SC2086
-                ${python} -m espnet2.bin.launch \
-                    --cmd "${cuda_cmd} --name ${jobname}" \
-                    --log "${lm_exp}/${uttid}"/train.log \
-                    --ngpu "${_ngpu}" \
-                    --num_nodes "${num_nodes}" \
-                    --init_file_prefix "${lm_exp}/${uttid}"/.dist_init_ \
-                    --multiprocessing_distributed true -- \
-                    ${python} -m espnet2.bin.lm_train \
-                    --ngpu "${ngpu}" \
-                    --use_preprocessor true \
-                    --bpemodel "${bpemodel}" \
-                    --token_type "${lm_token_type}" \
-                    --token_list "${token_list}" \
-                    --non_linguistic_symbols "${nlsyms_txt}" \
-                    --cleaner "${cleaner}" \
-                    --g2p "${g2p}" \
-                    --valid_data_path_and_name_and_type "${lm_trn_txt},text,text" \
-                    --valid_shape_file "${lm_stats_dir}/${uttid}/valid/text_shape.${lm_token_type}" \
-                    --fold_length "${lm_fold_length}" \
-                    --resume true \
-                    --output_dir "${lm_exp}/${uttid}" \
-                    ${_opts} ${lm_args}
-            done
-        fi
-
-        if [ ${stage} -le 9 ] && [ ${stop_stage} -ge 9 ]; then
-            log "Stage 9: Calc perplexity"
-            _opts=
-            for dir in data/lm_train/*; do
-                uttid=${dir##*/}
-                lm_trn_txt=data/lm_train/${uttid}/"lm_train.txt"
-                log "Perplexity calculation started... log: '${lm_exp}/${uttid}/perplexity_test/lm_calc_perplexity.log'"
-                # shellcheck disable=SC2086
-                ${cuda_cmd} --gpu "${ngpu}" "${lm_exp}/${uttid}"/perplexity_test/lm_calc_perplexity.log \
-                    ${python} -m espnet2.bin.lm_calc_perplexity \
-                    --ngpu "${ngpu}" \
-                    --data_path_and_name_and_type "${lm_trn_txt},text,text" \
-                    --train_config "${lm_exp}/${uttid}"/config.yaml \
-                    --model_file "${lm_exp}/${uttid}/${inference_lm}" \
-                    --output_dir "${lm_exp}/${uttid}/perplexity_test" \
-                    ${_opts}
-                log "PPL: ${lm_trn_txt}: $(cat ${lm_exp}/${uttid}/perplexity_test/ppl)"
-            done
-        fi
-    else
-        log "Stage 7-9: Skip traditional LM training stages: use_biased_lm=${use_biased_lm}, skip_lm_train=${skip_lm_train}, use_lm=${use_lm}..."
-    fi
-
     if [ ${stage} -le 10 ] && [ ${stop_stage} -ge 10 ]; then
         if "${use_ngram}"; then
             # Note that ngram language models need the installation of kenlm
@@ -1128,12 +936,18 @@ if [ ${stage} -le 16 ] && [ ${stop_stage} -ge 16 ]; then
     key_file=${keys_dir}/anchors.scp
     clip_info=${keys_dir}/clip_info
     mkdir -p ${anchors_dir}/outputs
+    primary_outputs=${align_exp}/${inference_tag}/decode/primary_outputs
+    if "${heuristic_search}"; then
+        primary_outputs+="_heuristic"
+    fi
 
     # TODO: This can be easily threaded
     ${python} local/seg_align.py \
         --key_file ${key_file} \
         --output_dir ${anchors_dir}/outputs \
         --clip_info ${clip_info} \
+        --sent_text_map data/decode/sent_text_map \
+        --scp_map ${primary_outputs}/scp_map \
         --eps "${eps}"
 fi
 
@@ -1199,7 +1013,48 @@ if [ ${stage} -le 17 ] && [ ${stop_stage} -ge 17 ]; then
 fi
 
 if [ ${stage} -le 18 ] && [ ${stop_stage} -ge 18 ]; then
-    log "Stage 18: Start bootstrapping for alignment improvement."
+    log "Stage 18: Perform final char-level alignment within the segments."
+
+    init_export_dir=data/aligned_iter_0/raw
+    ctc_align_dir=${align_exp}/${inference_tag}/decode/ctc_align
+    out_dir=${ctc_align_dir}/outputs
+    mkdir -p ${out_dir}
+
+    # Split the wav.scp file and the corresponding text file generated by
+    # previous stages
+    wav_key_file=${init_export_dir}/wav.scp
+    text_key_file=${init_export_dir}/text
+    _logdir=${ctc_align_dir}/logdir
+    mkdir -p "${_logdir}"
+    _nj=$(min "${nj}" "$(wc <${wav_key_file} -l)")
+    split_wav_scps=""
+    split_text_scps=""
+    for n in $(seq "${_nj}"); do
+        split_wav_scps+=" ${_logdir}/wav.${n}.scp"
+        split_text_scps+=" ${_logdir}/text.${n}.scp"
+    done
+
+    # shellcheck disable=SC2086
+    utils/split_scp.pl "${wav_key_file}" ${split_wav_scps}
+    # shellcheck disable=SC2086
+    utils/split_scp.pl "${text_key_file}" ${split_text_scps}
+
+    _nj=1
+    ${decode_cmd} --gpu "0" JOB=1:"${_nj}" "${_logdir}"/ctc_align.JOB.log \
+        ${python} local/ctc_align.py \
+        --asr_train_config "${asr_exp}"/config.yaml \
+        --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
+        --wav_scp "${_logdir}"/wav.JOB.scp \
+        --text "${_logdir}"/text.JOB.scp \
+        --min_window_size 5 \
+        --output_dir ${out_dir} || {
+        cat "$(grep -l -i error ${_logdir}/ctc_align.*.log)"
+        exit 1
+    }
+fi
+
+if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
+    log "Stage 19: Start bootstrapping for alignment improvement."
     primary_outputs=${align_exp}/${inference_tag}/decode/primary_outputs
     if "${heuristic_search}"; then
         primary_outputs+="_heuristic"

@@ -49,21 +49,22 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
         ${_opts}
 
     for file in "utt2spk" "wav.scp"; do
-        sort -o ${dst}/${file} ${dst}/${file}.unsorted
+        sort -u -o ${dst}/${file} ${dst}/${file}.unsorted
         rm ${dst}/${file}.unsorted
     done
 
     if "${kaldi_style}"; then
-        sort -o ${dst}/segments ${dst}/segments.unsorted
+        sort -u -o ${dst}/segments ${dst}/segments.unsorted
         rm ${dst}/segments.unsorted
     fi
 
     spk2utt=${dst}/spk2utt
     utils/utt2spk_to_spk2utt.pl <${dst}/utt2spk >${spk2utt} || exit 1
+    utils/validate_data_dir.sh --no-feats --no-text ${dst} || exit 1
 fi
 
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
-    log "stage2: Tokenize text data using char/jieba and yield a text file"
+    log "stage2: Tokenize text data using char/jieba and yield a text file and generate a text_map"
     ${python} local/cantonese_text_process.py \
         --input_dir "${txt_data_dir}" \
         --output_dir ${dst}

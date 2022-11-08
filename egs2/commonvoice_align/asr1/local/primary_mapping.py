@@ -2,6 +2,7 @@ import argparse
 import os
 from pathlib import Path
 from utils import mkdir_if_not_exist, read_anchor_file
+import shutil
 
 
 def primary_mapping(aligned_dir, output_dir):
@@ -30,6 +31,9 @@ def primary_mapping(aligned_dir, output_dir):
     all_hyps = set()
     stats_dir = os.path.join(output_dir, "stats")
     mkdir_if_not_exist(stats_dir)
+    matched_anchor_dir = os.path.join(output_dir, "anchors")
+    mkdir_if_not_exist(matched_anchor_dir)
+    res = set()
     with open(search_results, "w") as f:
         with open(dump, "w") as ofh:
             for ref, _ in ref_res.items():
@@ -41,9 +45,17 @@ def primary_mapping(aligned_dir, output_dir):
                 if ref_res[ref][0] == hyp:
                     matched_hyp.add(hyp)
                     matched_ref.add(ref)
+                    res.add((hyp, ref))
                     print(hyp, ref, file=f)
                     print(hyp, ref, *info[1], sum(info[1]),
                           f"{(info[1][0] / sum(info[1])):.2f}", file=ofh)
+    for fname_hash in os.listdir(aligned_dir):
+        file = os.path.join(aligned_dir, fname_hash)
+        fname, _, _, _, _csid = read_anchor_file(file)
+        hyp, ref = Path(fname).stem.split("_vs_")
+        if (hyp, ref) in res:
+            # Copy the corresponding anchor file to the matched_anchor_dir
+            shutil.copy(file, os.path.join(matched_anchor_dir, f"{hyp}_{ref}.anchor"))
     with open(os.path.join(stats_dir, "unmatched_hyp"), "w") as f:
         for hyp in all_hyps - matched_hyp:
             print(hyp, file=f)

@@ -12,11 +12,12 @@ asr_config=conf/tuning/train_asr_conformer5.yaml
 asr_lm_config=conf/train_lm.yaml
 inference_config=conf/decode_ngram.yaml
 asr_inference_config=conf/decode_asr.yaml
-asr_model_dir=pre_train_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
+asr_model_dir=pretrain_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
 finetune_asr_config=conf/tuning/finetune_asr_conformer5.yaml
 lm_tag=biased
+dumpdir="/export/b18/cxiao7/hk_legco/dump_align"
 
-input_text_dir="/home/cxiao7/research/speech2text/align_data_v1/processed/txt"
+input_text_dir="/home/cxiao7/research/speech2text/align_data_v3/processed/txt"
 
 if [[ "${lang}" == *"zh"* ]]; then
   nbpe=2500
@@ -54,8 +55,9 @@ fi
   --finetune_asr_config ${finetune_asr_config} \
   --input_text_dir ${input_text_dir} \
   --compute_primary_stats true \
-  --stage 17 \
-  --stop_stage 17
+  --dumpdir ${dumpdir} \
+  --stage 6 \
+  --stop_stage 6
 
 # ./align.sh \
 #     --ngpu 2 \

@@ -33,6 +33,7 @@ egs*/*/*/data*
 egs*/*/*/db
 egs*/*/*/downloads
 egs*/*/*/dump
+egs*/*/*/dump_align
 egs*/*/*/enhan
 egs*/*/*/exp
 egs*/*/*/fbank
@@ -44,7 +45,8 @@ egs*/*/*/nltk*
 egs*/*/*/.cache*
 egs*/*/*/pretrained_models*
 egs*/fisher_callhome_spanish/*/local/mapping*
-egs*/*/*/pre_train_exp
+egs*/*/*/pretrain_exp*
+egs*/*/*/pre_train_exp*
 egs*/*/*/align_exp
 
 # tools related
@@ -85,7 +87,5 @@ tools/anaconda
 tools/ice-g2p
 tools/fairseq
 tools/._*
-tools/anaconda
-tools/ice-g2p*
-tools/fairseq*
-tools/featbin*
+tools/k2-cxiao
+tools/kenlm

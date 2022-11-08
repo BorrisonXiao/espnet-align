@@ -29,6 +29,14 @@ def text_char_seg(text):
     return res.strip()
 
 
+def _add_space_digits(match):
+    """
+    Helper function for inserting spaces between long numbers.
+    """
+    if match.group() is not None:
+        return " ".join(list(match.group()))
+
+
 def format_text(input_dir, text_output, utt2spk_output, char_seg):
     utt2spk = open(utt2spk_output, "w", encoding='utf-8')
     with open(text_output, "w", encoding='utf-8') as ofh:

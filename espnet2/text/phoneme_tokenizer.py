@@ -4,6 +4,8 @@ import warnings
 from pathlib import Path
 from typing import Iterable, List, Optional, Union
 
+import nltk
+import pinyin_jyutping_sentence as pjs
 import g2p_en
 import jamo
 from typeguard import check_argument_types
@@ -19,6 +21,7 @@ g2p_choices = [
     "pyopenjtalk_accent",
     "pyopenjtalk_accent_with_pause",
     "pyopenjtalk_prosody",
+    "jyutping",
     "pypinyin_g2p",
     "pypinyin_g2p_phone",
     "pypinyin_g2p_phone_without_prosody",
@@ -43,6 +46,9 @@ g2p_choices = [
     "korean_jaso_no_space",
     "g2p_is",
 ]
+
+# Preload the CMU dictionary to save some time
+ARPABET = nltk.corpus.cmudict.dict()
 
 
 def split_by_space(text) -> List[str]:
@@ -182,6 +188,41 @@ def _numeric_feature_by_regex(regex, s):
     if match is None:
         return -50
     return int(match.group(1))
+
+
+def _isEng(word):
+    """
+    Return true if the char is an English word.
+    """
+    return re.search('[a-zA-Z]', word) != None
+
+
+def jyutping(text) -> List[str]:
+    CONSONANTS = ["gw", "kw", "ng", "b", "c", "d", "f", "g", "h", "j", "k",
+                  "l", "m", "n", "p", "s", "t", "w", "z"]
+
+    phones = []
+    for char in text.split():
+        if not _isEng(char):  # Avoid phonemize some english letters
+            # Seems pjs has some bug that might produce unexpected "，"
+            ph = re.sub("，", "", pjs.jyutping(char, tone_numbers=True))
+            if ph != char:
+                for con in CONSONANTS:
+                    # It is in fact possible to have consonant directly followed by a tone, e.g. "唔" => "m4"
+                    if ph.startswith(con) and not ph[len(con)].isdigit():
+                        ph = con + " " + ph[(len(con)):]
+                        break  # Note that plural consonants are reached first
+            else:
+                ph = "<ool>"
+        else:
+            # Use cmudict to phonemize English words
+            char_lower = char.lower()
+            # Note that OOVs will be characterized and converted
+            ph = " ".join(ARPABET[char_lower][0]).lower() if char_lower in ARPABET else " ".join([
+                " ".join(ARPABET[c][0]).lower() for c in char_lower])
+        phones += ph.split()
+
+    return phones
 
 
 def pypinyin_g2p(text) -> List[str]:
@@ -456,6 +497,8 @@ class PhonemeTokenizer(AbsTokenizer):
             self.g2p = pyopenjtalk_g2p_accent_with_pause
         elif g2p_type == "pyopenjtalk_prosody":
             self.g2p = pyopenjtalk_g2p_prosody
+        elif g2p_type == "jyutping":
+            self.g2p = jyutping
         elif g2p_type == "pypinyin_g2p":
             self.g2p = pypinyin_g2p
         elif g2p_type == "pypinyin_g2p_phone":
