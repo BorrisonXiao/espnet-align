@@ -4,14 +4,21 @@ import os
 import re
 
 punc = re.compile(r'\(|\)|\！|\？|\。|\＂|\＃|\＄|\％|\＆|\＇|\（|\）|\＊|\＋|\，|\－|\／|\：|\︰|\；|\＜|\＝|\＞|\＠|\［|\＼|\］|\＾|\＿|\｀|\｛|\｜|\｝|\～|\｟|\｠|\｢|\｣|\､|\〃|\《|\》|\》|\「|\」|\『|\』|\【|\】|\〔|\〕|\〖|\〗|\〘|\〙|\〚|\〛|\〜|\〝|\〞|\〟|\〰|\〾|\〿|\–—|\|\‘|\’|\‛|\“|\”|\"|\„|\‟|\…|\‧|\﹏|\、|\,|\.|\:|\?')
+# Unwanted audio clips
+EXCLUDE = ["作出立法會誓言", "恢復會議", "暫停會議", "會議主席人選變更", "表決鐘響", "法定人數不足"]
 
 
 def generate_keys(input_dir, output):
+    """
+    Generate the key file for VAD's distributed execution.
+    """
     with open(output, "w") as f:
         for mid in os.listdir(input_dir):
             mid_dir = os.path.join(input_dir, mid)
             for utt in os.listdir(mid_dir):
                 uttid = re.subn(punc, '', Path(utt).stem.replace(" ", ""))[0]
+                if uttid.strip().split("_")[0] in EXCLUDE:
+                    continue
                 utt_fp = os.path.join(mid_dir, utt)
                 print(f"{uttid} {utt_fp}", file=f)
 

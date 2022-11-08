@@ -3,13 +3,17 @@ from pathlib import Path
 import os
 
 
-def merge_lm_train(utts_dir, output):
+def merge_lm_train(utts_dir, output, sentence):
     with open(output, "w") as ofh:
-        for segid in os.listdir(utts_dir):
-            lm_train = os.path.join(utts_dir, segid, "lm_train.txt")
+        for scpid in os.listdir(utts_dir):
+            lm_train = os.path.join(utts_dir, scpid, "lm_train.txt")
             with open(lm_train, "r") as f:
-                txt = f.read().rstrip()
-                print(f"{txt}", file=ofh)
+                if sentence:
+                    for line in f:
+                        print(f"{line.strip()}", file=ofh)
+                else:
+                    txt = f.read().rstrip()
+                    print(f"{txt}", file=ofh)
 
 
 if __name__ == "__main__":
@@ -23,6 +27,8 @@ if __name__ == "__main__":
                         type=Path,
                         required=True,
                         help='The output file in which the merged texts are stored.')
+    parser.add_argument('--sentence', action='store_true',
+                        help='If true, the lm_train.txt will be sentence-level')
     args = parser.parse_args()
 
-    merge_lm_train(args.utts_dir, args.output)
+    merge_lm_train(args.utts_dir, args.output, args.sentence)

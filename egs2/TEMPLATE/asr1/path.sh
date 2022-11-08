@@ -9,6 +9,14 @@ export LC_ALL=C
 . "${MAIN_ROOT}"/tools/activate_python.sh && . "${MAIN_ROOT}"/tools/extra_path.sh
 export PATH=$MAIN_ROOT/utils:$MAIN_ROOT/espnet/bin:$PATH
 
+K2_ROOT=/home/cxiao7/research/espnet-cxiao/tools/k2-cxiao
+export PYTHONPATH=$K2_ROOT/k2/python:$PYTHONPATH
+export PYTHONPATH=$K2_ROOT/build_debug/lib:$PYTHONPATH
+# for debugging
+export K2_DISABLE_CHECKS=0
+export K2_SYNC_KERNELS=1
+export CUDA_LAUNCH_BLOCKING=1
+
 export OMP_NUM_THREADS=1
 
 # NOTE(kan-bayashi): Use UTF-8 in Python to avoid UnicodeDecodeError when LC_ALL=C

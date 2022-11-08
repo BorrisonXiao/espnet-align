@@ -3,17 +3,17 @@
 # Copyright 2020 Johns Hopkins University (Shinji Watanabe)
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
 
-. ./path.sh || exit 1;
-. ./cmd.sh || exit 1;
-. ./db.sh || exit 1;
+. ./path.sh || exit 1
+. ./cmd.sh || exit 1
+. ./db.sh || exit 1
 
 # general configuration
-stage=1      # start from 0 if you need to start from data preparation
+stage=1 # start from 0 if you need to start from data preparation
 stop_stage=2
 SECONDS=0
 lang=zh-HK # en de fr cy tt kab ca zh-TW it fa eu es ru tr nl eo zh-CN rw pt zh-HK cs pl uk
 
-. utils/parse_options.sh || exit 1;
+. utils/parse_options.sh || exit 1
 
 # base url for downloads.
 # Deprecated url:https://voice-prod-bundler-ee1969a6ce8178826482b88e843c335139bd3fb4.s3.amazonaws.com/cv-corpus-3/$lang.tar.gz
@@ -44,7 +44,7 @@ log "data preparation started"
 
 # Downloading skipped for using newer version at directory
 # /home/cxiao7/research/speech2text/commonvoice/cv-corpus-9.0-2022-04-27
-# if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then 
+# if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
 #     log "stage1: Download data to ${COMMONVOICE}"
 #     log "The default data of this recipe is from commonvoice 5.1, for newer version, you need to register at \
 #          https://commonvoice.mozilla.org/"
@@ -61,17 +61,20 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
 
     # remove test&dev data from validated sentences
     utils/copy_data_dir.sh data/"$(echo "validated_${lang}" | tr - _)" data/${train_set}
-    utils/filter_scp.pl --exclude data/${train_dev}/wav.scp data/${train_set}/wav.scp > data/${train_set}/temp_wav.scp
-    utils/filter_scp.pl --exclude data/${test_set}/wav.scp data/${train_set}/temp_wav.scp > data/${train_set}/wav.scp
+    utils/filter_scp.pl --exclude data/${train_dev}/wav.scp data/${train_set}/wav.scp >data/${train_set}/temp_wav.scp
+    utils/filter_scp.pl --exclude data/${test_set}/wav.scp data/${train_set}/temp_wav.scp >data/${train_set}/wav.scp
     utils/fix_data_dir.sh data/${train_set}
 fi
 
-if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then 
+if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     log "stage3: Segment data using char/jieba"
 
     for dset in "train" "test" "dev" "validated"; do
         mv "data/${dset}_zh_HK/text" "data/${dset}_zh_HK/text.raw"
-        python local/cantonese_text_process.py --input "data/${dset}_zh_HK/text.raw" --output "data/${dset}_zh_HK/text" --commonvoice
+        python local/cantonese_text_process.py \
+            --input "data/${dset}_zh_HK/text.raw" \
+            --output "data/${dset}_zh_HK/text" \
+            --commonvoice
     done
 fi
 
