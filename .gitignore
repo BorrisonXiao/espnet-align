@@ -47,7 +47,7 @@ egs*/*/*/pretrained_models*
 egs*/fisher_callhome_spanish/*/local/mapping*
 egs*/*/*/pretrain_exp*
 egs*/*/*/pre_train_exp*
-egs*/*/*/align_exp
+egs*/*/*/align_exp*
 
 # tools related
 tools/chainer
@@ -89,3 +89,7 @@ tools/fairseq
 tools/._*
 tools/k2-cxiao
 tools/kenlm
+tools/icefall
+
+# Random scripts
+egs2/commonvoice_align/local/test_lattice.py

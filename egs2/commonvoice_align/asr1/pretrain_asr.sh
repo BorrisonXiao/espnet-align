@@ -65,6 +65,7 @@ sos_eos="<sos/eos>"               # sos and eos symbole
 bpe_input_sentence_size=100000000 # Size of input sentence for BPE.
 bpe_nlsyms=                       # non-linguistic symbols list, separated by a comma, for BPE
 bpe_char_cover=1.0                # character coverage when modeling BPE
+lang_dir=data/lang_phone          # Directory for storing the language data, lexicons, etc.
 
 # Ngram model related
 use_ngram=false
@@ -110,6 +111,7 @@ num_paths=1000     # The 3rd argument of k2.random_paths.
 nll_batch_size=100 # Affect GPU memory usage when computing nll
 # during nbest rescoring
 k2_config=./conf/decode_asr_transformer_with_k2.yaml
+graph_dir=
 
 use_streaming=false # Whether to use streaming decoding
 
@@ -418,6 +420,10 @@ if [ -z "${ngram_exp}" ]; then
     ngram_exp="${expdir}/ngram"
 fi
 
+if [ -z "${graph_dir}" ]; then
+    graph_dir="${asr_exp}/graphs"
+fi
+
 if [ -z "${inference_tag}" ]; then
     if [ -n "${inference_config}" ]; then
         inference_tag="$(basename "${inference_config}" .yaml)"
@@ -436,11 +442,11 @@ if [ -z "${inference_tag}" ]; then
     fi
     inference_tag+="_asr_model_$(echo "${inference_asr_model}" | sed -e "s/\//_/g" -e "s/\.[^.]*$//g")"
 
-    if "${use_k2}"; then
-        inference_tag+="_use_k2"
-        inference_tag+="_k2_ctc_decoding_${k2_ctc_decoding}"
-        inference_tag+="_use_nbest_rescoring_${use_nbest_rescoring}"
-    fi
+    # if "${use_k2}"; then
+    #     inference_tag+="_use_k2"
+    #     inference_tag+="_k2_ctc_decoding_${k2_ctc_decoding}"
+    #     inference_tag+="_use_nbest_rescoring_${use_nbest_rescoring}"
+    # fi
 fi
 
 # ========================== Main stages start from here. ==========================
@@ -676,16 +682,17 @@ if ! "${skip_data_prep}"; then
             exit 2
         fi
 
-        # Create word-list for word-LM training
-        if ${use_word_lm} && [ "${token_type}" != word ]; then
+        # Create word-list for lexicon file creation
+        if [ "${token_type}" != word ]; then
             log "Generate word level token_list from ${to_tokenize}"
             ${python} -m espnet2.bin.tokenize_text \
                 --token_type word \
-                --input "${to_tokenize}" --output "${lm_token_list}" \
+                --input "${to_tokenize}" --output "${wordtoken_list}" \
                 --field 2- \
                 --cleaner "${cleaner}" \
                 --write_vocabulary true \
                 --vocabulary_size "${word_vocab_size}" \
+                --cutoff 2 \
                 --add_symbol "${blank}:0" \
                 --add_symbol "${oov}:1" \
                 --add_symbol "${sos_eos}:-1"
@@ -1145,8 +1152,52 @@ if [ -n "${download_model}" ]; then
 fi
 
 if ! "${skip_eval}"; then
-    if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
-        log "Stage 12: Decoding: training_dir=${asr_exp}"
+    if [ "${token_type}" = phn ]; then
+        if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
+            log "Stage 12: Preparing the lexicons before decoding"
+
+            mkdir -p ${lang_dir}
+
+            ${python} ./local/char2ph.py \
+                -i ${wordtoken_list} \
+                -o ${lang_dir}/raw_lexicon.txt \
+                --tokenlist
+        fi
+
+        # The following steps require icefall
+        if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
+            log "Stage 13: Preparing lang_phone"
+
+            mkdir -p ${graph_dir}
+
+            # The <blank> symbol is removed, as it will be replaced by <eps> anyway
+            tail -n +2 ${lang_dir}/raw_lexicon.txt >${lang_dir}/lexicon.txt
+
+            ${python} ./local/prepare_lang.py \
+                --lang_dir ${lang_dir} \
+                --token_list ${token_list} \
+                --sil_prob 0 \
+                --eps "<blank>"
+
+            # use "-" instead of "_" for kaldilm
+            ${python} -m kaldilm \
+                --read-symbol-table="${lang_dir}/words.txt" \
+                --disambig-symbol="#0" \
+                --max-order="${ngram_num}" \
+                "${ngram_exp}/${ngram_num}gram.arpa" >"${graph_dir}/G_${ngram_num}_gram.fst.txt"
+
+            ${python} ./local/compile_hlg.py \
+                --lang_dir "${lang_dir}" \
+                --graph_dir "${graph_dir}" \
+                --ngram_num "${ngram_num}"
+        fi
+
+    fi
+
+    if [ ${stage} -le 14 ] && [ ${stop_stage} -ge 14 ]; then
+        log "Stage 14: Decoding: training_dir=${asr_exp}"
+
+        # ${python} ./local/test_lattice.py
 
         if ${gpu_inference}; then
             _cmd="${cuda_cmd}"
@@ -1157,8 +1208,30 @@ if ! "${skip_eval}"; then
         fi
 
         _opts=
+        if "${use_k2}"; then
+            asr_inference_tool="espnet2.bin.asr_decode_k2"
+
+            use_ngram=false
+            _opts+="--decoding_graph ${graph_dir}/HLG.pt "
+            _opts+="--word_token_list ${lang_dir}/words.txt "
+            _opts+="--is_ctc_decoding False "
+            _opts+="--token_type ${token_type} "
+        else
+            if "${use_streaming}"; then
+                asr_inference_tool="espnet2.bin.asr_inference_streaming"
+            elif "${use_maskctc}"; then
+                asr_inference_tool="espnet2.bin.asr_inference_maskctc"
+            else
+                asr_inference_tool="espnet2.bin.asr_inference"
+            fi
+        fi
+
         if [ -n "${inference_config}" ]; then
-            _opts+="--config ${inference_config} "
+            if "${use_k2}"; then
+                _opts+="--k2_config ${inference_config} "
+            else
+                _opts+="--config ${inference_config} "
+            fi
         fi
         if "${use_lm}"; then
             if "${use_word_lm}"; then
@@ -1174,28 +1247,10 @@ if ! "${skip_eval}"; then
         fi
 
         # 2. Generate run.sh
-        log "Generate '${asr_exp}/${inference_tag}/run.sh'. You can resume the process from stage 12 using this script"
+        log "Generate '${asr_exp}/${inference_tag}/run.sh'. You can resume the process from stage 14 using this script"
         mkdir -p "${asr_exp}/${inference_tag}"
-        echo "${run_args} --stage 12 \"\$@\"; exit \$?" >"${asr_exp}/${inference_tag}/run.sh"
+        echo "${run_args} --stage 14 \"\$@\"; exit \$?" >"${asr_exp}/${inference_tag}/run.sh"
         chmod +x "${asr_exp}/${inference_tag}/run.sh"
-        if "${use_k2}"; then
-            # Now only _nj=1 is verified if using k2
-            asr_inference_tool="espnet2.bin.asr_inference_k2"
-
-            _opts+="--is_ctc_decoding ${k2_ctc_decoding} "
-            _opts+="--use_nbest_rescoring ${use_nbest_rescoring} "
-            _opts+="--num_paths ${num_paths} "
-            _opts+="--nll_batch_size ${nll_batch_size} "
-            _opts+="--k2_config ${k2_config} "
-        else
-            if "${use_streaming}"; then
-                asr_inference_tool="espnet2.bin.asr_inference_streaming"
-            elif "${use_maskctc}"; then
-                asr_inference_tool="espnet2.bin.asr_inference_maskctc"
-            else
-                asr_inference_tool="espnet2.bin.asr_inference"
-            fi
-        fi
 
         for dset in ${test_sets}; do
             _data="${data_feats}/${dset}"
@@ -1219,13 +1274,8 @@ if ! "${skip_eval}"; then
             # 1. Split the key file
             key_file=${_data}/${_scp}
             split_scps=""
-            if "${use_k2}"; then
-                # Now only _nj=1 is verified if using k2
-                _nj=1
-            else
-                _nj=$(min "${inference_nj}" "$(wc <${key_file} -l)")
-            fi
 
+            _nj=$(min "${inference_nj}" "$(wc <${key_file} -l)")
             for n in $(seq "${_nj}"); do
                 split_scps+=" ${_logdir}/keys.${n}.scp"
             done
@@ -1234,6 +1284,11 @@ if ! "${skip_eval}"; then
 
             # 2. Submit decoding jobs
             log "Decoding started... log: '${_logdir}/asr_inference.*.log'"
+
+            # Due to Grid instability, sometimes the script runs into occasional errors that can be resolved by reruns
+            set +e
+            set +o pipefail
+
             # shellcheck disable=SC2046,SC2086
             ${_cmd} --gpu "${_ngpu}" JOB=1:"${_nj}" "${_logdir}"/asr_inference.JOB.log \
                 ${python} -m ${asr_inference_tool} \
@@ -1244,10 +1299,51 @@ if ! "${skip_eval}"; then
                 --asr_train_config "${asr_exp}"/config.yaml \
                 --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
                 --output_dir "${_logdir}"/output.JOB \
-                ${_opts} ${inference_args} || {
-                cat $(grep -l -i error "${_logdir}"/asr_inference.*.log)
-                exit 1
-            }
+                ${_opts} ${inference_args}
+
+            rerun_dir="${_logdir}"/rerun
+            mkdir -p "${rerun_dir}"
+            for i in $(seq 5); do
+                grep -l "Error" "${_logdir}"/asr_inference.*.log | awk -F "." '{print $(NF-1)}' >"${rerun_dir}"/errors
+                if [ ! -s "${rerun_dir}"/errors ]; then
+                    rm -rf "${rerun_dir}"
+                    break
+                else
+                    readarray -t err <"${rerun_dir}"/errors
+                    j=0
+                    for k in "${err[@]}"; do
+                        ((j+=1))
+                        cp "${_logdir}"/keys."${k}".scp "${rerun_dir}"/keys."${j}".scp
+                    done
+                    # shellcheck disable=SC2046,SC2086
+                    ${_cmd} --gpu "${_ngpu}" JOB=1:"${j}" "${rerun_dir}"/asr_inference.JOB.log \
+                        ${python} -m ${asr_inference_tool} \
+                        --batch_size ${batch_size} \
+                        --ngpu "${_ngpu}" \
+                        --data_path_and_name_and_type "${_data}/${_scp},speech,${_type}" \
+                        --key_file "${rerun_dir}"/keys.JOB.scp \
+                        --asr_train_config "${asr_exp}"/config.yaml \
+                        --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
+                        --output_dir "${rerun_dir}"/output.JOB \
+                        ${_opts} ${inference_args}
+
+                    for k in "${err[@]}"; do
+                        log "back copying ${k}"
+                        cp -r "${rerun_dir}"/output."${j}" "${_logdir}"/output."${k}"
+                        cp -r "${rerun_dir}"/asr_inference."${j}".log "${_logdir}"/asr_inference."${k}".log
+                        ((j-=1))
+                    done
+                fi
+            done
+
+            if [ -f "${rerun_dir}"/errors ]; then
+                cat "$(grep -l -i error ${rerun_dir}/asr_inference.*.log)"
+                # rm -rf "${rerun_dir}"
+                # exit 1
+            fi
+
+            set -e
+            set -o pipefail
 
             # 3. Concatenates the output files from each jobs
             for f in token token_int score text; do
@@ -1260,19 +1356,16 @@ if ! "${skip_eval}"; then
         done
     fi
 
-    if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
-        log "Stage 13: Scoring"
-        if [ "${token_type}" = phn ]; then
-            log "Error: Not implemented for token_type=phn"
-            exit 1
-        fi
+    if [ ${stage} -le 15 ] && [ ${stop_stage} -ge 15 ]; then
+        log "Stage 15: Scoring"
 
         for dset in ${test_sets}; do
             _data="${data_feats}/${dset}"
             _dir="${asr_exp}/${inference_tag}/${dset}"
 
-            for _type in cer wer ter; do
-                [ "${_type}" = ter ] && [ ! -f "${bpemodel}" ] && continue
+            # (Cihan): Modified to using token for comparison (as the ref is space-delimited) and removed bpe
+            for _type in cer wer; do
+                [ "${_type}" = ter ] && continue
 
                 _scoredir="${_dir}/score_${_type}"
                 mkdir -p "${_scoredir}"
@@ -1295,7 +1388,7 @@ if ! "${skip_eval}"; then
                     # NOTE(kamo): Don't use cleaner for hyp
                     paste \
                         <(
-                            ${python} <"${_dir}/text" \
+                            ${python} <"${_dir}/token" \
                                 -m espnet2.bin.tokenize_text \
                                 -f 2- --input - --output - \
                                 --token_type word \
@@ -1325,7 +1418,7 @@ if ! "${skip_eval}"; then
                     # NOTE(kamo): Don't use cleaner for hyp
                     paste \
                         <(
-                            ${python} <"${_dir}/text" \
+                            ${python} <"${_dir}/token" \
                                 -m espnet2.bin.tokenize_text \
                                 -f 2- --input - --output - \
                                 --token_type char \
@@ -1352,7 +1445,7 @@ if ! "${skip_eval}"; then
                     # NOTE(kamo): Don't use cleaner for hyp
                     paste \
                         <(
-                            ${python} <"${_dir}/text" \
+                            ${python} <"${_dir}/token" \
                                 -m espnet2.bin.tokenize_text \
                                 -f 2- --input - --output - \
                                 --token_type bpe \
@@ -1383,153 +1476,6 @@ if ! "${skip_eval}"; then
     fi
 else
     log "Skip the evaluation stages"
-fi
-
-packed_model="${asr_exp}/${asr_exp##*/}_${inference_asr_model%.*}.zip"
-if [ -z "${download_model}" ]; then
-    # Skip pack preparation if using a downloaded model
-    if [ ${stage} -le 14 ] && [ ${stop_stage} -ge 14 ]; then
-        log "Stage 14: Pack model: ${packed_model}"
-
-        _opts=
-        if "${use_lm}"; then
-            _opts+="--lm_train_config ${lm_exp}/config.yaml "
-            _opts+="--lm_file ${lm_exp}/${inference_lm} "
-            _opts+="--option ${lm_exp}/perplexity_test/ppl "
-            _opts+="--option ${lm_exp}/images "
-        fi
-        if [ "${feats_normalize}" = global_mvn ]; then
-            _opts+="--option ${asr_stats_dir}/train/feats_stats.npz "
-        fi
-        if [ "${token_type}" = bpe ]; then
-            _opts+="--option ${bpemodel} "
-        fi
-        if [ "${nlsyms_txt}" != none ]; then
-            _opts+="--option ${nlsyms_txt} "
-        fi
-        # shellcheck disable=SC2086
-        ${python} -m espnet2.bin.pack asr \
-            --asr_train_config "${asr_exp}"/config.yaml \
-            --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
-            ${_opts} \
-            --option "${asr_exp}"/RESULTS.md \
-            --option "${asr_exp}"/RESULTS.md \
-            --option "${asr_exp}"/images \
-            --outpath "${packed_model}"
-    fi
-fi
-
-if ! "${skip_upload}"; then
-    if [ ${stage} -le 15 ] && [ ${stop_stage} -ge 15 ]; then
-        log "Stage 15: Upload model to Zenodo: ${packed_model}"
-        log "Warning: Upload model to Zenodo will be deprecated. We encourage to use Hugging Face"
-
-        # To upload your model, you need to do:
-        #   1. Sign up to Zenodo: https://zenodo.org/
-        #   2. Create access token: https://zenodo.org/account/settings/applications/tokens/new/
-        #   3. Set your environment: % export ACCESS_TOKEN="<your token>"
-
-        if command -v git &>/dev/null; then
-            _creator_name="$(git config user.name)"
-            _checkout="
-git checkout $(git show -s --format=%H)"
-
-        else
-            _creator_name="$(whoami)"
-            _checkout=""
-        fi
-        # /some/where/espnet/egs2/foo/asr1/ -> foo/asr1
-        _task="$(pwd | rev | cut -d/ -f2 | rev)"
-        # foo/asr1 -> foo
-        _corpus="${_task%/*}"
-        _model_name="${_creator_name}/${_corpus}_$(basename ${packed_model} .zip)"
-
-        # Generate description file
-        cat <<EOF >"${asr_exp}"/description
-This model was trained by ${_creator_name} using ${_task} recipe in <a href="https://github.com/espnet/espnet/">espnet</a>.
-<p>&nbsp;</p>
-<ul>
-<li><strong>Python API</strong><pre><code class="language-python">See https://github.com/espnet/espnet_model_zoo</code></pre></li>
-<li><strong>Evaluate in the recipe</strong><pre>
-<code class="language-bash">git clone https://github.com/espnet/espnet
-cd espnet${_checkout}
-pip install -e .
-cd $(pwd | rev | cut -d/ -f1-3 | rev)
-./run.sh --skip_data_prep false --skip_train true --download_model ${_model_name}</code>
-</pre></li>
-<li><strong>Results</strong><pre><code>$(cat "${asr_exp}"/RESULTS.md)</code></pre></li>
-<li><strong>ASR config</strong><pre><code>$(cat "${asr_exp}"/config.yaml)</code></pre></li>
-<li><strong>LM config</strong><pre><code>$(if ${use_lm}; then cat "${lm_exp}"/config.yaml; else echo NONE; fi)</code></pre></li>
-</ul>
-EOF
-
-        # NOTE(kamo): The model file is uploaded here, but not published yet.
-        #   Please confirm your record at Zenodo and publish it by yourself.
-
-        # shellcheck disable=SC2086
-        espnet_model_zoo_upload \
-            --file "${packed_model}" \
-            --title "ESPnet2 pretrained model, ${_model_name}, fs=${fs}, lang=${lang}" \
-            --description_file "${asr_exp}"/description \
-            --creator_name "${_creator_name}" \
-            --license "CC-BY-4.0" \
-            --use_sandbox false \
-            --publish false
-    fi
-else
-    log "Skip the uploading stage"
-fi
-
-if ! "${skip_upload_hf}"; then
-    if [ ${stage} -le 16 ] && [ ${stop_stage} -ge 16 ]; then
-        [ -z "${hf_repo}" ] &&
-            log "ERROR: You need to setup the variable hf_repo with the name of the repository located at HuggingFace, follow the following steps described here https://github.com/espnet/espnet/blob/master/CONTRIBUTING.md#132-espnet2-recipes" &&
-            exit 1
-        log "Stage 16: Upload model to HuggingFace: ${hf_repo}"
-
-        gitlfs=$(git lfs --version 2>/dev/null || true)
-        [ -z "${gitlfs}" ] &&
-            log "ERROR: You need to install git-lfs first" &&
-            exit 1
-
-        dir_repo=${expdir}/hf_${hf_repo//"/"/"_"}
-        [ ! -d "${dir_repo}" ] && git clone https://huggingface.co/${hf_repo} ${dir_repo}
-
-        if command -v git &>/dev/null; then
-            _creator_name="$(git config user.name)"
-            _checkout="git checkout $(git show -s --format=%H)"
-        else
-            _creator_name="$(whoami)"
-            _checkout=""
-        fi
-        # /some/where/espnet/egs2/foo/asr1/ -> foo/asr1
-        _task="$(pwd | rev | cut -d/ -f2 | rev)"
-        # foo/asr1 -> foo
-        _corpus="${_task%/*}"
-        _model_name="${_creator_name}/${_corpus}_$(basename ${packed_model} .zip)"
-
-        # copy files in ${dir_repo}
-        unzip -o ${packed_model} -d ${dir_repo}
-        # Generate description file
-        # shellcheck disable=SC2034
-        hf_task=automatic-speech-recognition
-        # shellcheck disable=SC2034
-        espnet_task=ASR
-        # shellcheck disable=SC2034
-        task_exp=${asr_exp}
-        eval "echo \"$(cat scripts/utils/TEMPLATE_HF_Readme.md)\"" >"${dir_repo}"/README.md
-
-        this_folder=${PWD}
-        cd ${dir_repo}
-        if [ -n "$(git status --porcelain)" ]; then
-            git add .
-            git commit -m "Update model"
-        fi
-        git push
-        cd ${this_folder}
-    fi
-else
-    log "Skip the uploading to HuggingFace stage"
 fi
 
 log "Successfully finished. [elapsed=${SECONDS}s]"

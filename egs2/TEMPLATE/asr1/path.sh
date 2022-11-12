@@ -16,6 +16,10 @@ export PYTHONPATH=$K2_ROOT/build_debug/lib:$PYTHONPATH
 export K2_DISABLE_CHECKS=0
 export K2_SYNC_KERNELS=1
 export CUDA_LAUNCH_BLOCKING=1
+# To fix the weird libcuda.so.1: cannot open shared object file import error
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib32/
+
+export PYTHONPATH=/home/cxiao7/research/icefall-cxiao:$PYTHONPATH
 
 export OMP_NUM_THREADS=1
 

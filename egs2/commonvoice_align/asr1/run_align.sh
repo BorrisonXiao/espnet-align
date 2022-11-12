@@ -10,7 +10,8 @@ test_set="decode"
 
 asr_config=conf/tuning/train_asr_conformer5.yaml
 asr_lm_config=conf/train_lm.yaml
-inference_config=conf/decode_ngram.yaml
+# inference_config=conf/decode_ngram.yaml
+inference_config=conf/decode_k2.yaml
 asr_inference_config=conf/decode_asr.yaml
 asr_model_dir=pretrain_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
 finetune_asr_config=conf/tuning/finetune_asr_conformer5.yaml
