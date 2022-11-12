@@ -94,6 +94,7 @@ sos_eos="<sos/eos>"               # sos and eos symbole
 bpe_input_sentence_size=100000000 # Size of input sentence for BPE.
 bpe_nlsyms=                       # non-linguistic symbols list, separated by a comma, for BPE
 bpe_char_cover=1.0                # character coverage when modeling BPE
+lang_dir=data/lang_phone          # Directory for storing the language data, lexicons, etc.
 
 # Ngram model related
 use_ngram=true
@@ -608,9 +609,11 @@ if "${pretrain_asr}"; then
             --lang "${lang}" \
             --nj ${nj} \
             --inference_nj ${inference_nj} \
+            --gpu_inference ${gpu_inference} \
             --use_lm false \
             --use_word_lm false \
             --use_ngram true \
+            --use_k2 true \
             --lm_config "${asr_lm_config}" \
             --token_type phn \
             --feats_type raw \
@@ -626,8 +629,9 @@ if "${pretrain_asr}"; then
             --add_token_text data/lm_train/lm_train.txt \
             --dumpdir ${dumpdir} \
             --g2p "jyutping" \
-            --stage 11 \
-            --stop_stage 11
+            --lang_dir ${lang_dir} \
+            --stage 15 \
+            --stop_stage 15
     fi
 fi
 
