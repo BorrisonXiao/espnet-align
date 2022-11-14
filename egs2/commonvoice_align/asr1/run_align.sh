@@ -36,7 +36,7 @@ fi
   --nj 64 \
   --lang "${lang}" \
   --use_lm false \
-  --token_type word \
+  --token_type phn \
   --nbpe $nbpe \
   --feats_type raw \
   --speed_perturb_factors "0.9 1.0 1.1" \
@@ -47,7 +47,7 @@ fi
   --asr_exp ${asr_model_dir} \
   --expdir align_exp \
   --lm_tag ${lm_tag} \
-  --inference_nj 64 \
+  --inference_nj 80 \
   --phoneme_align true \
   --pretrain_asr true \
   --asr_lm_config ${asr_lm_config} \
@@ -57,8 +57,9 @@ fi
   --input_text_dir ${input_text_dir} \
   --compute_primary_stats true \
   --dumpdir ${dumpdir} \
-  --stage 6 \
-  --stop_stage 6
+  --use_k2 true \
+  --stage 12 \
+  --stop_stage 12
 
 # ./align.sh \
 #     --ngpu 2 \

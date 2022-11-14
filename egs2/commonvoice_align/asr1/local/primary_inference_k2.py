@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse
-import datetime
 import logging
 import sys
+from distutils.version import LooseVersion
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, List, Optional, Sequence, Tuple, Union
+import os
+from datetime import datetime
 
 import k2
 from icefall.decode import (
@@ -20,9 +22,14 @@ import torch
 import yaml
 from typeguard import check_argument_types, check_return_type
 
+from espnet2.asr.transducer.beam_search_transducer import BeamSearchTransducer
+from espnet2.asr.transducer.beam_search_transducer import (
+    ExtendedHypothesis as ExtTransHypothesis,
+)
+from espnet2.asr.transducer.beam_search_transducer import Hypothesis as TransHypothesis
 from espnet2.fileio.datadir_writer import DatadirWriter
-from espnet2.fst.lm_rescore import nbest_am_lm_scores
 from espnet2.tasks.asr import ASRTask
+from espnet2.tasks.enh_s2t import EnhS2TTask
 from espnet2.tasks.lm import LMTask
 from espnet2.text.build_tokenizer import build_tokenizer
 from espnet2.text.token_id_converter import TokenIDConverter
@@ -30,8 +37,15 @@ from espnet2.torch_utils.device_funcs import to_device
 from espnet2.torch_utils.set_all_random_seed import set_all_random_seed
 from espnet2.utils import config_argparse
 from espnet2.utils.types import str2bool, str2triple_str, str_or_none
-from espnet.utils.cli_utils import get_commandline_args
+from espnet.nets.batch_beam_search import BatchBeamSearch
+from espnet.nets.batch_beam_search_online_sim import BatchBeamSearchOnlineSim
+from espnet.nets.beam_search import BeamSearch, Hypothesis
 from espnet.nets.pytorch_backend.transformer.subsampling import TooShortUttError
+from espnet.nets.scorer_interface import BatchScorerInterface
+from espnet.nets.scorers.ctc import CTCPrefixScorer
+from espnet.nets.scorers.length_bonus import LengthBonus
+from espnet.utils.cli_utils import get_commandline_args
+from utils import extract_mid
 
 
 def indices_to_split_size(indices, total_elements: int = None):
@@ -84,41 +98,6 @@ def build_ctc_topo(tokens: List[int]) -> k2.Fsa:
     ans = k2.Fsa.from_str(arcs, num_aux_labels=1)
     ans = k2.arc_sort(ans)
     return ans
-
-
-# Modified from: https://github.com/k2-fsa/snowfall/blob/master/snowfall/common.py#L309
-# def get_texts(best_paths: k2.Fsa) -> List[List[int]]:
-#    """Extract the texts from the best-path FSAs.
-#
-#     Args:
-#         best_paths:  a k2.Fsa with best_paths.arcs.num_axes() == 3, i.e.
-#                  containing multiple FSAs, which is expected to be the result
-#                  of k2.shortest_path (otherwise the returned values won't
-#                  be meaningful).  Must have the 'aux_labels' attribute, as
-#                a ragged tensor.
-#    Return:
-#        Returns a list of lists of int, containing the label sequences we
-#        decoded.
-#    """
-#    # remove any 0's or -1's (there should be no 0's left but may be -1's.)
-#
-#    if isinstance(best_paths.aux_labels, k2.RaggedTensor):
-#        aux_labels = best_paths.aux_labels.remove_values_leq(0)
-#        aux_shape = best_paths.arcs.shape().compose(aux_labels.shape())
-#
-#        # remove the states and arcs axes.
-#        aux_shape = aux_shape.remove_axis(1)
-#        aux_shape = aux_shape.remove_axis(1)
-#        aux_labels = k2.RaggedTensor(aux_shape, aux_labels.values())
-#    else:
-#        # remove axis corresponding to states.
-#        aux_shape = best_paths.arcs.shape().remove_axis(1)
-#        aux_labels = k2.RaggedTensor(aux_shape, best_paths.aux_labels)
-#        # remove 0's and -1's.
-#        aux_labels = aux_labels.remove_values_leq(0)
-#
-#    assert aux_labels.num_axes == 2
-#    return aux_labels.tolist()
 
 
 class k2Speech2Text:
@@ -201,7 +180,15 @@ class k2Speech2Text:
             lm, lm_train_args = LMTask.build_model_from_file(
                 lm_train_config, lm_file, device
             )
-            self.lm = lm
+
+            if quantize_lm:
+                logging.info("Use quantized lm for decoding.")
+
+                lm = torch.quantization.quantize_dynamic(
+                    lm, qconfig_spec=quantize_modules, dtype=quantize_dtype
+                )
+
+            scorers["lm"] = lm.lm
 
         self.is_ctc_decoding = is_ctc_decoding
         self.use_fgram_rescoring = use_fgram_rescoring
@@ -212,17 +199,6 @@ class k2Speech2Text:
         self.decoding_graph = self.decoding_graph.to(device)
 
         assert token_type is not None
-#        if bpemodel is None:
-#            bpemodel = asr_train_args.bpemodel
-
-#        if token_type is None:
-#            tokenizer = None
-#        elif token_type == "bpe":
-#            if bpemodel is not None:
-#                tokenizer = build_tokenizer(token_type=token_type, bpemodel=bpemodel)
-#            else:
-#                tokenizer = None
-#        else:
         tokenizer = build_tokenizer(token_type=token_type)
         converter = TokenIDConverter(token_list=token_list)
         logging.info(f"Text tokenizer: {tokenizer}")
@@ -479,7 +455,6 @@ class k2Speech2Text:
 
 def inference(
     output_dir: str,
-    decoding_graph: str,
     maxlenratio: float,
     minlenratio: float,
     batch_size: int,
@@ -501,6 +476,7 @@ def inference(
     lm_file: Optional[str],
     word_lm_train_config: Optional[str],
     word_lm_file: Optional[str],
+    graph_dir: Path,
     model_tag: Optional[str],
     token_type: Optional[str],
     word_token_list: Optional[str],
@@ -529,6 +505,11 @@ def inference(
     else:
         device = "cpu"
 
+    graphs = {}
+    # Load decoding graphs
+    for mid in os.listdir(graph_dir):
+        graphs[mid] = os.path.join(graph_dir, mid, "HLG.pt")
+
     # 1. Set random-seed
     set_all_random_seed(seed)
     with open(k2_config) as k2_config_file:
@@ -538,9 +519,9 @@ def inference(
     speech2text_kwargs = dict(
         asr_train_config=asr_train_config,
         asr_model_file=asr_model_file,
-        decoding_graph=decoding_graph,
         lm_train_config=lm_train_config,
         lm_file=lm_file,
+        decoding_graph=graphs[list(graphs.keys())[0]],
         token_type=token_type,
         token_list_file=word_token_list,
         bpemodel=bpemodel,
@@ -563,10 +544,12 @@ def inference(
     speech2text_kwargs = {**speech2text_kwargs, **dict_k2_config}
     logging.info(f"======speech2text==========={speech2text_kwargs}")
 
-    speech2text = k2Speech2Text.from_pretrained(
+    # The speech2text var is defined as tuple(mid, model), the initial model
+    # is simply for data preprocessing
+    speech2text = (list(graphs.keys())[0], k2Speech2Text.from_pretrained(
         model_tag=model_tag,
         **speech2text_kwargs,
-    )
+    ))
 
     # 3. Build data-iterator
     loader = ASRTask.build_streaming_iterator(
@@ -575,14 +558,18 @@ def inference(
         batch_size=batch_size,
         key_file=key_file,
         num_workers=num_workers,
-        preprocess_fn=ASRTask.build_preprocess_fn(speech2text.asr_train_args, False),
-        collate_fn=ASRTask.build_collate_fn(speech2text.asr_train_args, False),
+        preprocess_fn=ASRTask.build_preprocess_fn(speech2text[1].asr_train_args, False),
+        collate_fn=ASRTask.build_collate_fn(speech2text[1].asr_train_args, False),
         allow_variable_data_keys=allow_variable_data_keys,
         inference=True,
     )
 
+    data_size = sum(1 for _ in open(key_file))
+    progress = 0
+    start_time = datetime.now()
+    prev_iter_time = start_time
+
     with DatadirWriter(output_dir) as writer:
-        start_decoding_time = datetime.datetime.now()
         for batch_idx, (keys, batch) in enumerate(loader):
             if batch_idx % 10 == 0:
                 logging.info(f"Processing {batch_idx} batch")
@@ -591,13 +578,39 @@ def inference(
             _bs = len(next(iter(batch.values())))
             assert len(keys) == _bs, f"{len(keys)} != {_bs}"
             batch = {k: v[0] for k, v in batch.items() if not k.endswith("_lengths")}
+            progress += 1
 
-            # 1-best list of (text, token, token_int)
+            # N-best list of (text, token, token_int, hyp_object)
             try:
-                results = speech2text(**batch)
+                # On-demand rebuild of speech2text object to use the correct decoding graph
+                # Note that this one-item-cache-like strategy makes the order of keys CRUCIAL
+                batch_mid = extract_mid(keys[0])
+                if batch_mid not in graphs:
+                    # Fixme (Cihan): some meetings do not have utterances for some reason
+                    continue
+                if speech2text[0] != batch_mid:
+                    logging.info(f"Loading decoding graph {graphs[batch_mid]}...")
+                    speech2text_kwargs["decoding_graph"] = graphs[batch_mid]
+                    speech2text = (batch_mid, k2Speech2Text.from_pretrained(
+                        model_tag=model_tag,
+                        **speech2text_kwargs,
+                    ))
+                results = speech2text[1](**batch)
             except TooShortUttError as e:
                 logging.warning(f"Utterance {keys} {e}")
-                results = [[" ", ["<space>"], [2], 0.0]] * nbest
+                hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
+                results = [[" ", ["<space>"], [2], hyp]] * nbest
+
+            if progress % 10 == 0:
+                curr_time = datetime.now()
+                iter_time = (curr_time - prev_iter_time)
+                prev_iter_time = curr_time
+                finish_time = (curr_time - start_time) / \
+                    progress * (data_size - progress)
+                finish_time_str = str(finish_time).split(".")[0]
+                iter_time_str = str(int(iter_time.total_seconds()))
+                logging.info(
+                    f"{progress}/{data_size}, 10_iter_time={iter_time_str} seconds, estimated to finish in {finish_time_str}...")
 
             for key_idx, (text, token, token_int, score) in enumerate(results):
                 key = keys[key_idx]
@@ -609,6 +622,7 @@ def inference(
 
                 if text is not None:
                     best_writer["text"][key] = text
+                    logging.info(f"{key}:\n{text}")
 
         end_decoding_time = datetime.datetime.now()
         decoding_duration = end_decoding_time - start_decoding_time
@@ -617,7 +631,7 @@ def inference(
 
 def get_parser():
     parser = config_argparse.ArgumentParser(
-        description="ASR Decoding",
+        description="Primary Inference using K2",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -694,6 +708,11 @@ def get_parser():
         help="Word LM parameter file",
     )
     group.add_argument(
+        "--graph_dir",
+        type=Path,
+        help="Path to the directory in which compiled HLG graphs are stored",
+    )
+    group.add_argument(
         "--model_tag",
         type=str,
         help="Pretrained model tag. If specify this option, *_train_config and "
@@ -717,7 +736,9 @@ def get_parser():
         help="Input length ratio to obtain max output length. "
         "If maxlenratio=0.0 (default), it uses a end-detect "
         "function "
-        "to automatically find maximum hypothesis lengths",
+        "to automatically find maximum hypothesis lengths."
+        "If maxlenratio<0.0, its absolute value is interpreted"
+        "as a constant max output length",
     )
     group.add_argument(
         "--minlenratio",
@@ -739,7 +760,7 @@ def get_parser():
         "--token_type",
         type=str_or_none,
         default=None,
-        choices=["phn", "word"],
+        choices=["word", "phn", None],
         help="The token type for ASR model. "
         "If not given, refers from the training args",
     )
@@ -775,8 +796,6 @@ def get_parser():
         default=100,
         help="batch_size when computing nll during nbest rescoring",
     )
-    group.add_argument("--decoding_graph", type=str_or_none,
-                       default=None, help="decoding graph")
     group.add_argument("--word_token_list", type=str_or_none,
                        default=None, help="output token list")
     group.add_argument("--k2_config", type=str, help="Config file for decoding with k2")
