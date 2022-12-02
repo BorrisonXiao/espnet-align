@@ -12,6 +12,7 @@ asr_config=conf/tuning/train_asr_conformer5.yaml
 asr_lm_config=conf/train_lm.yaml
 # inference_config=conf/decode_ngram.yaml
 inference_config=conf/decode_k2.yaml
+align_config=conf/align_k2.yaml
 asr_inference_config=conf/decode_asr.yaml
 asr_model_dir=pretrain_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
 finetune_asr_config=conf/tuning/finetune_asr_conformer5.yaml
@@ -42,6 +43,7 @@ fi
   --speed_perturb_factors "0.9 1.0 1.1" \
   --asr_config "${asr_config}" \
   --inference_config "${inference_config}" \
+  --align_config "${align_config}" \
   --test_sets ${test_set} \
   --asr_tag "decode_vad" \
   --asr_exp ${asr_model_dir} \
@@ -58,8 +60,12 @@ fi
   --compute_primary_stats true \
   --dumpdir ${dumpdir} \
   --use_k2 true \
-  --stage 12 \
-  --stop_stage 12
+  --flex_window_size 150 \
+  --flex_overlap_size 30 \
+  --flex_deletion_weight 0 \
+  --flex_insertion_weight -2 \
+  --stage 21 \
+  --stop_stage 21
 
 # ./align.sh \
 #     --ngpu 2 \
