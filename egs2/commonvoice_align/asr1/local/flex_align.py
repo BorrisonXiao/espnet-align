@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence, Tuple, Union
 import os
 from datetime import datetime
+from utils import segid2uttid
 
 import k2
 from icefall.decode import (
@@ -15,6 +16,7 @@ from icefall.decode import (
 )
 from icefall.utils import (
     get_texts,
+    get_texts_with_timestamp,
 )
 
 import numpy as np
@@ -45,7 +47,6 @@ from espnet.nets.scorer_interface import BatchScorerInterface
 from espnet.nets.scorers.ctc import CTCPrefixScorer
 from espnet.nets.scorers.length_bonus import LengthBonus
 from espnet.utils.cli_utils import get_commandline_args
-from utils import extract_mid
 
 
 def indices_to_split_size(indices, total_elements: int = None):
@@ -129,12 +130,12 @@ class k2Speech2Text:
         minlenratio: float = 0.0,
         batch_size: int = 1,
         dtype: str = "float32",
-        beam_size: int = 8,
         ctc_weight: float = 0.5,
         lm_weight: float = 1.0,
         penalty: float = 0.0,
         nbest: int = 1,
         streaming: bool = False,
+        fs: int = 16000,
         search_beam_size: int = 20,
         output_beam_size: int = 20,
         min_active_states: int = 14000,
@@ -188,6 +189,7 @@ class k2Speech2Text:
         # load decoding graph
         self.decoding_graph = k2.Fsa.from_dict(torch.load(decoding_graph))
         self.decoding_graph = self.decoding_graph.to(device)
+        # code.interact(local=dict(globals(), **locals()))
 
         assert token_type is not None
         tokenizer = build_tokenizer(token_type=token_type)
@@ -214,11 +216,12 @@ class k2Speech2Text:
         self.nbest_batch_size = nbest_batch_size
         self.nll_batch_size = nll_batch_size
         self.asr_model_ignore_id = 0
+        self.fs = fs
 
     @torch.no_grad()
     def __call__(
         self, speech: Union[torch.Tensor, np.ndarray]
-    ) -> List[Tuple[Optional[str], List[str], List[int], float]]:
+    ) -> List[Tuple[Optional[str], List[str], List[int], float, Optional[List[float]]]]:
         """Inference
 
         Args:
@@ -237,13 +240,25 @@ class k2Speech2Text:
         # lengths: (1,)
         lengths = speech.new_full([1], dtype=torch.long, fill_value=speech.size(1))
         batch = {"speech": speech, "speech_lengths": lengths}
+        len_secs = lengths / self.fs
 
         # a. To device
         batch = to_device(batch, device=self.device)
 
+        enc_start_time = datetime.now()
         # b. Forward Encoder
         # enc: [N, T, C]
         enc, encoder_out_lens = self.asr_model.encode(**batch)
+
+        curr_time = datetime.now()
+        enc_time = (curr_time - enc_start_time)
+        enc_time_str = str(int(enc_time.total_seconds()))
+        logging.info(f"Done encoding in {enc_time_str} seconds...")
+
+        # The ratio of frames versus seconds, can be computed based on one sample
+        self.f2s_ratio = len_secs[0] / encoder_out_lens[0]
+        logging.info(
+            f"The estimated frame to second ratio is: {self.f2s_ratio}, computed by {len_secs[0]} / {encoder_out_lens[0]}.")
 
         # nnet_output: [N, T, C]
         logp_encoder_output = torch.nn.functional.log_softmax(
@@ -281,7 +296,6 @@ class k2Speech2Text:
         # https://github.com/k2-fsa/k2/blob/master/k2/python/k2/fsa_algo.py#L308
         # For definition of k2.intersect_dense_pruned:
         # https://github.com/k2-fsa/k2/blob/master/k2/python/k2/autograd.py#L648
-
         lattices = get_lattice(
             nnet_output=logp_encoder_output,
             decoding_graph=self.decoding_graph,
@@ -397,18 +411,32 @@ class k2Speech2Text:
                 use_double_scores=True, log_semiring=False
             ).tolist()
             hyps = get_texts(best_paths)
+            timestamps = get_texts_with_timestamp(best_paths).timestamps
+            # logging.info(timestamps)
 
         assert len(scores) == len(hyps)
 
-        for token_int, score in zip(hyps, scores):
+        for token_int, score, timestamp, len_sec in zip(hyps, scores, timestamps, len_secs):
             # For decoding methods nbest_rescoring and ctc_decoding
             # hyps stores token_index, which is lattice.labels.
+            # TODO: Extend this to perhaps include finish time?
+            # alignments = []
+            # prev_label = 0
+            # for t, label in enumerate(timestamp):
+            #     if not len(label):
+            #         continue
+            #     label = label[0]
+            #     if label != prev_label and label != 0:
+            #         alignments.append((t * self.f2s_ratio).item())
+            alignments = [(frame * self.f2s_ratio).item() for frame in timestamp]
+            # The last element in alignments is the length of the audio
+            alignments.append(len_sec.item())
 
             # convert token_id to text with self.tokenizer
             token = self.converter.ids2tokens(token_int)
             assert self.tokenizer is not None
             text = self.tokenizer.tokens2text(token)
-            results.append((text, token, token_int, score))
+            results.append((text, token, token_int, score, alignments))
 
         assert check_return_type(results)
         return results
@@ -450,7 +478,6 @@ def inference(
     minlenratio: float,
     batch_size: int,
     dtype: str,
-    beam_size: int,
     ngpu: int,
     seed: int,
     ctc_weight: float,
@@ -474,6 +501,8 @@ def inference(
     bpemodel: Optional[str],
     allow_variable_data_keys: bool,
     streaming: bool,
+    search_beam_size: int,
+    output_beam_size: int,
     is_ctc_decoding: bool,
     use_nbest_rescoring: bool,
     num_paths: int,
@@ -498,8 +527,8 @@ def inference(
 
     graphs = {}
     # Load decoding graphs
-    for mid in os.listdir(graph_dir):
-        graphs[mid] = os.path.join(graph_dir, mid, "HLG.pt")
+    for uttid in os.listdir(graph_dir):
+        graphs[uttid] = os.path.join(graph_dir, uttid, "HLG.pt")
 
     # 1. Set random-seed
     set_all_random_seed(seed)
@@ -520,12 +549,13 @@ def inference(
         maxlenratio=maxlenratio,
         minlenratio=minlenratio,
         dtype=dtype,
-        beam_size=beam_size,
         ctc_weight=ctc_weight,
         lm_weight=lm_weight,
         penalty=penalty,
         nbest=nbest,
         streaming=streaming,
+        search_beam_size=search_beam_size,
+        output_beam_size=output_beam_size,
         is_ctc_decoding=is_ctc_decoding,
         use_nbest_rescoring=use_nbest_rescoring,
         num_paths=num_paths,
@@ -535,7 +565,7 @@ def inference(
     speech2text_kwargs = {**speech2text_kwargs, **dict_k2_config}
     logging.info(f"======speech2text==========={speech2text_kwargs}")
 
-    # The speech2text var is defined as tuple(mid, model), the initial model
+    # The speech2text var is defined as tuple(segid, model), the initial model
     # is simply for data preprocessing
     speech2text = (list(graphs.keys())[0], k2Speech2Text.from_pretrained(
         model_tag=model_tag,
@@ -575,14 +605,16 @@ def inference(
             try:
                 # On-demand rebuild of speech2text object to use the correct decoding graph
                 # Note that this one-item-cache-like strategy makes the order of keys CRUCIAL
-                batch_mid = extract_mid(keys[0])
-                if batch_mid not in graphs:
+                batch_uttid = segid2uttid(keys[0])
+                if batch_uttid not in graphs:
                     # Fixme (Cihan): some meetings do not have utterances for some reason
+                    logging.info(
+                        f"Skipping {batch_uttid} as its decoding graph is not found...")
                     continue
-                if speech2text[0] != batch_mid:
-                    logging.info(f"Loading decoding graph {graphs[batch_mid]}...")
-                    speech2text_kwargs["decoding_graph"] = graphs[batch_mid]
-                    speech2text = (batch_mid, k2Speech2Text.from_pretrained(
+                if speech2text[0] != batch_uttid:
+                    logging.info(f"Loading decoding graph {graphs[batch_uttid]}...")
+                    speech2text_kwargs["decoding_graph"] = graphs[batch_uttid]
+                    speech2text = (batch_uttid, k2Speech2Text.from_pretrained(
                         model_tag=model_tag,
                         **speech2text_kwargs,
                     ))
@@ -592,24 +624,27 @@ def inference(
                 hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
                 results = [[" ", ["<space>"], [2], hyp]] * nbest
 
-            if progress % 10 == 0:
-                curr_time = datetime.now()
-                iter_time = (curr_time - prev_iter_time)
-                prev_iter_time = curr_time
-                finish_time = (curr_time - start_time) / \
-                    progress * (data_size - progress)
-                finish_time_str = str(finish_time).split(".")[0]
-                iter_time_str = str(int(iter_time.total_seconds()))
-                logging.info(
-                    f"{progress}/{data_size}, 10_iter_time={iter_time_str} seconds, estimated to finish in {finish_time_str}...")
+            # Since each batch takes a long time on CPU
+            # if progress % 10 == 0:
+            curr_time = datetime.now()
+            iter_time = (curr_time - prev_iter_time)
+            prev_iter_time = curr_time
+            finish_time = (curr_time - start_time) / \
+                progress * (data_size - progress)
+            finish_time_str = str(finish_time).split(".")[0]
+            iter_time_str = str(int(iter_time.total_seconds()))
+            logging.info(
+                f"{progress}/{data_size}, iter_time={iter_time_str} seconds, estimated to finish in {finish_time_str}...")
 
-            for key_idx, (text, token, token_int, score) in enumerate(results):
+            for key_idx, (text, token, token_int, score, alignments) in enumerate(results):
                 key = keys[key_idx]
                 best_writer = writer["1best_recog"]
                 # Write the result to each file
                 best_writer["token"][key] = " ".join(token)
                 best_writer["token_int"][key] = " ".join(map(str, token_int))
                 best_writer["score"][key] = str(score)
+                # TODO: Add end time as well
+                best_writer["alignments"][key] = " ".join(map(str, alignments))
 
                 if text is not None:
                     best_writer["text"][key] = text
@@ -718,7 +753,10 @@ def get_parser():
         help="The batch size for inference",
     )
     group.add_argument("--nbest", type=int, default=1, help="Output N-best hypotheses")
-    group.add_argument("--beam_size", type=int, default=20, help="Beam size")
+    group.add_argument("--search_beam_size", type=int,
+                       default=20, help="Beam size for searching")
+    group.add_argument("--output_beam_size", type=int,
+                       default=20, help="Beam size for output")
     group.add_argument("--penalty", type=float, default=0.0, help="Insertion penalty")
     group.add_argument(
         "--maxlenratio",

@@ -53,6 +53,12 @@ heuristic_search=true
 wrap_primary_results=true
 wrap_primary_results_norm=true
 compute_primary_stats=true
+flex_graph_dir=
+flex_deletion_weight=0
+align_config=
+flex_window_size=180
+flex_overlap_size=30
+flex_insertion_weight=0
 
 # General configuration
 stage=1              # Processes starts from the specified stage.
@@ -462,6 +468,9 @@ fi
 if [ -z "${graph_dir}" ]; then
     graph_dir="${align_exp}/graphs"
 fi
+if [ -z "${flex_graph_dir}" ]; then
+    flex_graph_dir="${align_exp}/align_graphs"
+fi
 
 if [ -z "${inference_tag}" ]; then
     if [ -n "${inference_config}" ]; then
@@ -782,6 +791,8 @@ if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
     chmod +x "${align_exp}/${inference_tag}/run.sh"
 
     _data="${data_feats}/decode"
+    # TODO: Change it back to decode
+    # _dir="${align_exp}/${inference_tag}/decode_rerun"
     _dir="${align_exp}/${inference_tag}/decode"
     _logdir="${_dir}/logdir"
     mkdir -p "${_logdir}"
@@ -801,6 +812,8 @@ if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
 
     # 1. Split the key file
     key_file=${_data}/${_scp}
+    # TODO: Change it back
+    # key_file=/home/cxiao7/research/espnet-cxiao/egs2/commonvoice_align/asr1/align_exp/align_decode_vad_3gram_biased/decode_k2_ngram_ngram_3gram_asr_model_valid.acc.best_use_k2_k2_ctc_decoding_true_use_nbest_rescoring_true/decode/logdir/keys.12.scp
     sorted_key_file=${key_file}.sorted
     split_scps=""
     _nj=$(min "${inference_nj}" "$(wc <${key_file} -l)")
@@ -818,7 +831,7 @@ if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
     log "Decoding started... log: '${_logdir}/asr_inference.*.log'"
     # It seems that c12 and b02 are broken for k2
     # shellcheck disable=SC2046,SC2086
-    ${_cmd} --gpu "${_ngpu}" -l hostname="!c12*\&!b02*" JOB=1:"${_nj}" "${_logdir}"/asr_inference.JOB.log \
+    ${_cmd} --gpu "${_ngpu}" -l "hostname=!c12*\&!b02*,mem_free=32G,ram_free=32G" JOB=1:"${_nj}" "${_logdir}"/asr_inference.JOB.log \
         ${python} ${primary_inference_tool} \
         --batch_size ${batch_size} \
         --ngpu "${_ngpu}" \
@@ -831,67 +844,6 @@ if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
         cat "$(grep -l -i error ${_logdir}/asr_inference.*.log)"
         exit 1
     }
-
-    # # Due to Grid instability, sometimes the script runs into occasional errors that can be resolved by reruns
-    # set +e
-    # set +o pipefail
-
-    # # shellcheck disable=SC2046,SC2086
-    # ${_cmd} --gpu "${_ngpu}" JOB=1:"${_nj}" "${_logdir}"/asr_inference.JOB.log \
-    #     ${python} ${primary_inference_tool} \
-    #     --batch_size ${batch_size} \
-    #     --ngpu "${_ngpu}" \
-    #     --data_path_and_name_and_type "${sorted_key_file},speech,${_type}" \
-    #     --key_file "${_logdir}"/keys.JOB.scp \
-    #     --asr_train_config "${asr_exp}"/config.yaml \
-    #     --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
-    #     --output_dir "${_logdir}"/output.JOB \
-    #     ${_opts} ${inference_args}
-
-    # rerun_dir="${_logdir}"/rerun
-    # mkdir -p "${rerun_dir}"
-    # for i in $(seq 3); do
-    #     grep -l "Error" "${_logdir}"/asr_inference.*.log | awk -F "." '{print $(NF-1)}' >"${rerun_dir}"/errors
-    #     if [ ! -s "${rerun_dir}"/errors ]; then
-    #         rm -rf "${rerun_dir}"
-    #         break
-    #     else
-    #         log "Re-running to resolve Grid errors"
-    #         readarray -t err <"${rerun_dir}"/errors
-    #         j=0
-    #         for k in "${err[@]}"; do
-    #             ((j += 1))
-    #             cp "${_logdir}"/keys."${k}".scp "${rerun_dir}"/keys."${j}".scp
-    #         done
-    #         # shellcheck disable=SC2046,SC2086
-    #         ${_cmd} --gpu "${_ngpu}" JOB=1:"${j}" "${rerun_dir}"/asr_inference.JOB.log \
-    #             ${python} -m ${primary_inference_tool} \
-    #             --batch_size ${batch_size} \
-    #             --ngpu "${_ngpu}" \
-    #             --data_path_and_name_and_type "${_data}/${_scp},speech,${_type}" \
-    #             --key_file "${rerun_dir}"/keys.JOB.scp \
-    #             --asr_train_config "${asr_exp}"/config.yaml \
-    #             --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
-    #             --output_dir "${rerun_dir}"/output.JOB \
-    #             ${_opts} ${inference_args}
-
-    #         for k in "${err[@]}"; do
-    #             log "back copying ${k}"
-    #             cp -r "${rerun_dir}"/output."${j}" "${_logdir}"/output."${k}"
-    #             cp -r "${rerun_dir}"/asr_inference."${j}".log "${_logdir}"/asr_inference."${k}".log
-    #             ((j -= 1))
-    #         done
-    #     fi
-    # done
-
-    # if [ -f "${rerun_dir}"/errors ]; then
-    #     cat "$(grep -l -i error ${rerun_dir}/asr_inference.*.log)"
-    #     # rm -rf "${rerun_dir}"
-    #     # exit 1
-    # fi
-
-    # set -e
-    # set -o pipefail
 
     # 3. Concatenates the output files from each jobs
     for f in token token_int score text; do
@@ -1126,46 +1078,177 @@ fi
 #     fi
 # fi
 
-# if [ ${stage} -le 18 ] && [ ${stop_stage} -ge 18 ]; then
-#     log "Stage 18: Perform final char-level alignment within the segments."
+# TODO: Wrap this up with an if
+if [ ${stage} -le 18 ] && [ ${stop_stage} -ge 18 ]; then
+    log "Stage 18: Perform re-segmentation for flexible alignment."
 
-#     init_export_dir=data/aligned_iter_0/raw
-#     ctc_align_dir=${align_exp}/${inference_tag}/decode/ctc_align
-#     out_dir=${ctc_align_dir}/outputs
-#     mkdir -p ${out_dir}
+    keyfile=/home/cxiao7/research/speech2text/for_k2/data/wav.scp
+    flex_align_dir=${align_exp}/flex_align/decode
+    out_dir=${flex_align_dir}/re_seg/raw
+    mkdir -p out_dir
 
-#     # Split the wav.scp file and the corresponding text file generated by
-#     # previous stages
-#     wav_key_file=${init_export_dir}/wav.scp
-#     text_key_file=${init_export_dir}/text
-#     _logdir=${ctc_align_dir}/logdir
-#     mkdir -p "${_logdir}"
-#     _nj=$(min "${nj}" "$(wc <${wav_key_file} -l)")
-#     split_wav_scps=""
-#     split_text_scps=""
-#     for n in $(seq "${_nj}"); do
-#         split_wav_scps+=" ${_logdir}/wav.${n}.scp"
-#         split_text_scps+=" ${_logdir}/text.${n}.scp"
-#     done
+    ${python} local/resegmentation.py \
+        --keyfile ${keyfile} \
+        --output_dir ${out_dir} \
+        --vad_dir ${vad_data_dir} \
+        --vad \
+        --window_size ${flex_window_size} \
+        --overlap_size ${flex_overlap_size}
 
-#     # shellcheck disable=SC2086
-#     utils/split_scp.pl "${wav_key_file}" ${split_wav_scps}
-#     # shellcheck disable=SC2086
-#     utils/split_scp.pl "${text_key_file}" ${split_text_scps}
+    flex_data=${flex_align_dir}/re_seg/data
 
-#     _nj=1
-#     ${decode_cmd} --gpu "0" JOB=1:"${_nj}" "${_logdir}"/ctc_align.JOB.log \
-#         ${python} local/ctc_align.py \
-#         --asr_train_config "${asr_exp}"/config.yaml \
-#         --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
-#         --wav_scp "${_logdir}"/wav.JOB.scp \
-#         --text "${_logdir}"/text.JOB.scp \
-#         --min_window_size 5 \
-#         --output_dir ${out_dir} || {
-#         cat "$(grep -l -i error ${_logdir}/ctc_align.*.log)"
-#         exit 1
-#     }
-# fi
+    local/data_vad_decode.sh \
+        --local_data_dir ${out_dir} \
+        --dst ${flex_data} \
+        --stage 1 \
+        --stop_stage 1 --kaldi_style true
+
+    log "Format wav.scp: ${flex_data}/ -> ${data_feats}/flex_data"
+
+    utils/copy_data_dir.sh --validate_opts --non-print ${flex_data} "${data_feats}/flex_data"
+    rm -f ${data_feats}/flex_data/{segments,wav.scp,reco2file_and_channel,reco2dur}
+    _opts="--segments ${flex_data}/segments "
+    # shellcheck disable=SC2086
+    scripts/audio/format_wav_scp.sh --nj "${nj}" --cmd "${train_cmd}" \
+        --audio-format "${audio_format}" --fs "${fs}" ${_opts} \
+        "${flex_data}/wav.scp" "${data_feats}/flex_data"
+
+    echo "${feats_type}" >"${data_feats}/flex_data/feats_type"
+fi
+
+if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
+    log "Stage 19: Building graphs for flexible alignment."
+
+    # init_export_dir=data/aligned_iter_0/raw
+    # TODO: Change
+    init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
+    flex_align_dir=${align_exp}/flex_align/decode
+    out_dir=${flex_align_dir}/outputs
+    mkdir -p ${out_dir}
+
+    # Split the wav.scp file and the corresponding text file generated by
+    # previous stages
+    text_key_file=${init_export_dir}/text_map
+    _logdir=${flex_align_dir}/logdir
+    mkdir -p "${_logdir}"
+    _nj=$(min "${inference_nj}" "$(wc <${text_key_file} -l)")
+    split_text_scps=""
+    for n in $(seq "${_nj}"); do
+        split_text_scps+=" ${_logdir}/text.${n}.scp"
+    done
+    # shellcheck disable=SC2086
+    utils/split_scp.pl "${text_key_file}" ${split_text_scps}
+
+    ${decode_cmd} --gpu "0" -l "hostname=!c12*\&!b02*,mem_free=32G,ram_free=32G" JOB=1:"${_nj}" "${_logdir}"/build_fa_graphs.JOB.log \
+        ${python} local/build_fa_graphs.py \
+        --key_file "${_logdir}"/text.JOB.scp \
+        --lang_dir "${lang_dir}" \
+        --weight 0 \
+        --deletion_weight "${flex_deletion_weight}" \
+        --determinize \
+        --allow_unk \
+        --insertion_weight ${flex_insertion_weight} \
+        --output_dir ${flex_graph_dir} || {
+        cat "$(grep -l -i error ${_logdir}/build_fa_graphs.*.log)"
+        exit 1
+    }
+fi
+
+if [ ${stage} -le 20 ] && [ ${stop_stage} -ge 20 ]; then
+    log "Stage 20: Perform flexible alignment."
+
+    if ${gpu_inference}; then
+        _cmd="${cuda_cmd}"
+        _ngpu=1
+    else
+        _cmd="${decode_cmd}"
+        _ngpu=0
+    fi
+
+    # TODO: Change
+    # init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
+    init_export_dir=/home/cxiao7/research/espnet-cxiao/egs2/commonvoice_align/asr1/dump_align/raw/flex_data
+    flex_align_dir=${align_exp}/flex_align/decode
+    _data="${data_feats}/flex_data"
+
+    _opts=
+    _opts+="--graph_dir ${flex_graph_dir} "
+    _opts+="--word_token_list ${lang_dir}/words.txt "
+    _opts+="--is_ctc_decoding False "
+    _opts+="--token_type ${token_type} "
+    _opts+="--k2_config ${align_config} "
+
+    # Split the wav.scp file and the corresponding text file generated by
+    # previous stages
+    wav_key_file=${init_export_dir}/wav.scp
+    _logdir=${flex_align_dir}/logdir
+    mkdir -p "${_logdir}"
+    _nj=$(min "${inference_nj}" "$(wc <${wav_key_file} -l)")
+    split_wav_scps=""
+    for n in $(seq "${_nj}"); do
+        split_wav_scps+=" ${_logdir}/wav.${n}.scp"
+    done
+
+    # shellcheck disable=SC2086
+    utils/split_scp.pl "${wav_key_file}" ${split_wav_scps}
+
+    _feats_type="$(<${_data}/feats_type)"
+    if [ "${_feats_type}" = raw ]; then
+        _scp=wav.scp
+        if [[ "${audio_format}" == *ark* ]]; then
+            _type=kaldi_ark
+        else
+            _type=sound
+        fi
+    else
+        _scp=feats.scp
+        _type=kaldi_ark
+    fi
+
+    ${decode_cmd} --gpu "${_ngpu}" -l "hostname=!c12*\&!b02*,mem_free=40G,ram_free=40G" JOB=1:"${_nj}" "${_logdir}"/flex_align.JOB.log \
+        ${python} local/flex_align.py \
+        --batch_size ${batch_size} \
+        --ngpu "${_ngpu}" \
+        --data_path_and_name_and_type "${wav_key_file},speech,${_type}" \
+        --key_file "${_logdir}"/wav.JOB.scp \
+        --asr_train_config "${asr_exp}"/config.yaml \
+        --asr_model_file "${asr_exp}"/"${inference_asr_model}" \
+        --output_dir "${_logdir}"/output.JOB \
+        ${_opts} ${inference_args} || {
+        cat "$(grep -l -i error ${_logdir}/flex_align.*.log)"
+        exit 1
+    }
+
+    # 3. Concatenates the output files from each jobs
+    for f in token token_int score text alignments; do
+        if [ -f "${_logdir}/output.1/1best_recog/${f}" ]; then
+            for i in $(seq "${_nj}"); do
+                cat "${_logdir}/output.${i}/1best_recog/${f}"
+            done | sort -k1 >"${flex_align_dir}/${f}"
+        fi
+    done
+fi
+
+if [ ${stage} -le 21 ] && [ ${stop_stage} -ge 21 ]; then
+    log "Stage 21: Form stm files."
+    # TODO: Change
+    init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
+    flex_align_dir=${align_exp}/flex_align/decode
+    out_dir=${flex_align_dir}/outputs
+    seg_file=${flex_align_dir}/re_seg/data/segments
+
+    # # Note that this algorithm requires sorted wav.scp before flexible alignment
+    # ${python} local/clean_salign.py \
+    #     --input_dir "${flex_align_dir}" \
+    #     --output_dir "${out_dir}" \
+    #     --text_map ${init_export_dir}/text_map \
+    #     --segments "${seg_file}"
+
+    # ${python} local/merge_alignments.py \
+    #     --input_dir "${out_dir}"
+
+    ${python} local/cal_align_wer.py --input_dir "${out_dir}/data" --textmap ${init_export_dir}/text_map
+fi
 
 # if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
 #     log "Stage 19: Start bootstrapping for alignment improvement."
