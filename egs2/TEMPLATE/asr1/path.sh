@@ -9,7 +9,7 @@ export LC_ALL=C
 . "${MAIN_ROOT}"/tools/activate_python.sh && . "${MAIN_ROOT}"/tools/extra_path.sh
 export PATH=$MAIN_ROOT/utils:$MAIN_ROOT/espnet/bin:$PATH
 
-K2_ROOT=/home/cxiao7/research/espnet-cxiao/tools/k2-cxiao
+K2_ROOT=/home/cxiao7/research/espnet/tools/k2-cxiao
 export PYTHONPATH=$K2_ROOT/k2/python:$PYTHONPATH
 export PYTHONPATH=$K2_ROOT/build_debug/lib:$PYTHONPATH
 # for debugging
