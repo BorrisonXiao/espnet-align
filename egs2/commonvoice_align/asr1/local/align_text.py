@@ -6,7 +6,7 @@ from ph2char import ph2char
 import hashlib
 
 
-def align_text(keyfile, eps, token_type, to_align_dir, raw_anchor_dir):
+def align_text(keyfile, eps, token_type, to_align_dir, raw_anchor_dir, hash_fname=False):
     """
     Perform text2text alignment of two text files by calling the align-text script in kaldi.
     """
@@ -16,10 +16,11 @@ def align_text(keyfile, eps, token_type, to_align_dir, raw_anchor_dir):
         for line in f:
             hyp, ref = line.strip().split(" ", maxsplit=1)
             # The filename will be hased to avoid the long filename error
-            anchor_fname = "_vs_".join(
-                [Path(hyp).stem, Path(ref).stem])
+            # anchor_fname = "_vs_".join(
+            #     [Path(hyp).stem, Path(ref).stem])
+            anchor_fname = Path(ref).stem
             fname_hash = hashlib.md5(anchor_fname.encode(
-                'utf-8')).hexdigest() + ".anchor"
+                'utf-8')).hexdigest() + ".anchor" if hash_fname else anchor_fname + ".anchor"
             anchor_fp = os.path.join(token_anchor_dir, fname_hash)
             with open(anchor_fp, "w") as ofh:
                 print(anchor_fname, file=ofh)

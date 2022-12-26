@@ -8,7 +8,7 @@
 . ./db.sh || exit 1
 
 # general configuration
-stage=2
+stage=1
 stop_stage=2
 SECONDS=0
 lang=zh-HK

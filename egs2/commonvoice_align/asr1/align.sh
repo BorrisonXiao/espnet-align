@@ -24,11 +24,11 @@ SECONDS=0
 
 # General
 input_text_dir="/home/cxiao7/research/speech2text/align_data_v3/processed/txt"
-input_audio_dir="/home/cxiao7/research/speech2text/align_data_v3/processed/audio"
+input_audio_dir="/home/cxiao7/research/speech2text/align_data_v4/processed/audio"
 
 # VAD related
 vad_data_dir=data/vad
-vad_nj=64
+vad_nj=80
 vad_mthread=2
 seg_file_format="kaldi" # Segment file format: "json", "kaldi"
 
@@ -537,7 +537,9 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
         --local_data_dir ${vad_data_dir} \
         --txt_data_dir ${input_text_dir} \
         --dst data/decode \
-        --kaldi_style true
+        --kaldi_style true \
+        --stage 1 \
+        --stop_stage 1
 fi
 
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
@@ -855,31 +857,156 @@ if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
     done
 fi
 
-# if [ ${stage} -le 12 ] && [ ${stop_stage} -ge 12 ]; then
-#     log "Stage 12: Merge decoded text for each utterance."
+if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
+    log "Stage 13: Merge decoded text for each utterance."
 
-#     dset=decode
-#     _dir="${align_exp}/${inference_tag}/${dset}"
-#     mkdir -p ${_dir}/merged
-#     rm -f ${_dir}/merged/{*.txt,*.sorted}
-#     ${python} local/merge_txt.py \
-#         --input ${_dir}/text \
-#         --output_dir ${_dir}/merged \
-#         --decode
+    _dir="${align_exp}/${inference_tag}/decode"
+    rm -rf ${_dir}/merged
+    mkdir -p ${_dir}/merged
+    ${python} local/merge_txt.py \
+        --input ${_dir}/token \
+        --output_dir ${_dir}/merged \
+        --decode
 
-#     # Sort the merged text using -V to fix the insufficient 0-padding issue
-#     for txt in "${_dir}"/merged/*; do
-#         fname=${txt##/}
-#         sorted=${fname}.sorted
-#         awk 'match($0, /seg[0-9]+/) {print substr($0, RSTART+3, RLENGTH-3) " " $0}' "${txt}" |
-#             sort -k 1 -V | cut -f 3- -d " " | awk -v d=" " '{s=(NR==1?s:s d)$0}END{print s}' >"${sorted}"
-#         mv "${sorted}" "${txt}"
-#     done
-# fi
+    # Sort the merged text using -V to fix the insufficient 0-padding issue
+    for txt in "${_dir}"/merged/*; do
+        fname=${txt##/}
+        sorted=${fname}.sorted
+        awk 'match($0, /seg[0-9]+/) {print substr($0, RSTART+3, RLENGTH-3) " " $0}' "${txt}" |
+            sort -k 1 -V | cut -f 3- -d " " | awk -v d=" " '{s=(NR==1?s:s d)$0}END{print s}' >"${sorted}"
+        mv "${sorted}" "${txt}"
+    done
+fi
 
-# if [ ${stage} -le 13 ] && [ ${stop_stage} -ge 13 ]; then
-#     log "Stage 13: Compute the Levenshtein distance of the decoded text and the groud-truth text."
-#     dset=decode
+if [ ${stage} -le 14 ] && [ ${stop_stage} -ge 14 ]; then
+    log "Stage 14: Merged text align for primary segmentation"
+
+    _dir="${align_exp}/${inference_tag}/decode"
+    raw_anchor_dir="${_dir}/anchors/raw"
+    token_tag=char
+
+    _opts=
+    # Requires pip install pinyin_jyutping_sentence if --phoneme_align
+    if "${phoneme_align}"; then
+        token_tag=phoneme
+        _opts+="--use_phoneme "
+        if "${ignore_tone}"; then
+            _opts+="--ignore_tone "
+        fi
+    fi
+
+    token_anchor_dir="${raw_anchor_dir}/${token_tag}"
+    mkdir -p "${token_anchor_dir}"
+    mkdir -p "${raw_anchor_dir}"/char
+    rm -f "${raw_anchor_dir}"/*/*.anchor
+    to_align_dir=${_dir}/to_align
+    mkdir -p ${to_align_dir}
+
+    # Generate sorted key files for decoded text
+    ${python} local/sort_decoded_keys.py \
+        --decoded_dir ${_dir}/merged \
+        --output ${to_align_dir}/decode_text_map
+
+    # Note that for now this cannot be splitted as it might break scps in the middle w.r.t. a meeting
+    ${python} local/dp_pre_align.py \
+        --text_map data/decode/text_map \
+        --output_dir ${to_align_dir} \
+        --ref \
+        ${_opts}
+
+    ${python} local/dp_pre_align.py \
+        --text_map ${to_align_dir}/decode_text_map \
+        --output_dir ${to_align_dir} \
+        ${_opts}
+
+    ${python} local/build_search_map.py \
+        --dir ${to_align_dir}/dump \
+        --output ${to_align_dir}/search_map \
+        ${_opts}
+fi
+
+if [ ${stage} -le 15 ] && [ ${stop_stage} -ge 15 ]; then
+    log "Stage 15: Compute the Levenshtein distance of the decoded text and the groud-truth text."
+
+    _dir="${align_exp}/${inference_tag}/decode"
+    raw_anchor_dir="${_dir}/anchors/raw"
+    to_align_dir=${_dir}/to_align
+    key_file=${to_align_dir}/search_map
+    _logdir=${to_align_dir}/logdir
+    mkdir -p "${_logdir}"
+    token_tag=char
+
+    # # phoneme_align is broken for some reason, more phs than chars
+    # if "${phoneme_align}"; then
+    #     token_tag=phoneme
+    # fi
+
+    _nj=$(min "${nj}" "$(wc <${key_file} -l)")
+    split_scps=""
+    for n in $(seq "${_nj}"); do
+        split_scps+=" ${_logdir}/keys.${n}.scp"
+    done
+    # shellcheck disable=SC2086
+    utils/split_scp.pl "${key_file}" ${split_scps}
+
+    # ${python} local/align_text.py \
+    #     --keyfile "${_logdir}"/keys.1.scp \
+    #     --token_type ${token_tag} \
+    #     --to_align_dir ${to_align_dir} \
+    #     --eps "\"${eps}\"" \
+    #     --raw_anchor_dir ${raw_anchor_dir}
+
+    ${decode_cmd} --gpu "0" JOB=1:"${_nj}" "${_logdir}"/align_text.JOB.log \
+        ${python} local/align_text.py \
+        --keyfile "${_logdir}"/keys.JOB.scp \
+        --token_type ${token_tag} \
+        --to_align_dir ${to_align_dir} \
+        --eps "\"${eps}\"" \
+        --raw_anchor_dir ${raw_anchor_dir} || {
+        cat "$(grep -l -i error ${_logdir}/align_text.*.log)"
+        exit 1
+    }
+fi
+
+if [ ${stage} -le 16 ] && [ ${stop_stage} -ge 16 ]; then
+    log "Stage 16 (Experimental): Find anchors for each decoded segment."
+
+    _dir="${align_exp}/${inference_tag}/decode"
+    char_dir="${_dir}/anchors/raw/char"
+    to_align_dir=${_dir}/to_align
+    # search_map=${to_align_dir}/search_map
+
+    primary_outputs=${_dir}/primary_outputs
+    _logdir=${primary_outputs}/logdir
+    mkdir -p "${_logdir}"
+
+    # TODO: Perhaps thread this but not really necessary?
+    ${python} local/match_hyp.py \
+        --input_dir ${char_dir} \
+        --output_dir ${primary_outputs} \
+        --ratio_threshold 0.2 \
+        --score_threshold 0.4
+
+    # Place sentence breaks for flexible alignment
+    mkdir -p ${primary_outputs}/dump/output
+    ${python} local/break_sentences.py \
+        --input_dir ${primary_outputs}/dump/idx \
+        --output_dir ${primary_outputs}/dump/output \
+        --text_map data/decode/sent_text_map \
+        --decode_text_map "${to_align_dir}"/decode_text_map
+
+    # Export the aligned data
+    mkdir -p ${primary_outputs}/export
+    ${python} local/export_aligned_data.py \
+        --input_dir ${primary_outputs}/dump/output/txt \
+        --output_dir ${primary_outputs}/export \
+        --wavscp data/decode/wav.scp \
+        --utt2spk data/decode/utt2spk
+fi
+
+# if [ ${stage} -le 14 ] && [ ${stop_stage} -ge 14 ]; then
+#     log "Stage 14: Compute the Levenshtein distance of the decoded text and the groud-truth text."
+
 #     _dir="${align_exp}/${inference_tag}/decode"
 #     raw_anchor_dir="${_dir}/anchors/raw"
 #     token_tag=char
@@ -911,7 +1038,7 @@ fi
 #     # TODO: Perhaps thread this as well
 #     ${python} local/txt_pre_align.py \
 #         --decoded_dir ${_dir}/merged \
-#         --text_map data/${dset}/text_map \
+#         --text_map data/decode/text_map \
 #         --output_dir ${to_align_dir} \
 #         ${_opts}
 
@@ -933,7 +1060,7 @@ fi
 #         --to_align_dir ${to_align_dir} \
 #         --eps "\"${eps}\"" \
 #         --raw_anchor_dir ${raw_anchor_dir} || {
-#         cat "$(grep -l -i error ${_logdir}/asr_inference.*.log)"
+#         cat "$(grep -l -i error ${_logdir}/align_text.*.log)"
 #         exit 1
 #     }
 # fi
@@ -1081,8 +1208,12 @@ fi
 # TODO: Wrap this up with an if
 if [ ${stage} -le 18 ] && [ ${stop_stage} -ge 18 ]; then
     log "Stage 18: Perform re-segmentation for flexible alignment."
+    _dir="${align_exp}/${inference_tag}/decode"
+    primary_outputs=${_dir}/primary_outputs
 
-    keyfile=/home/cxiao7/research/speech2text/for_k2/data/wav.scp
+    # TODO: Change
+    # keyfile=/home/cxiao7/research/speech2text/for_k2/data/wav.scp
+    keyfile=${primary_outputs}/export/wav.scp
     flex_align_dir=${align_exp}/flex_align/decode
     out_dir=${flex_align_dir}/re_seg/raw
     mkdir -p out_dir
@@ -1119,9 +1250,13 @@ fi
 if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
     log "Stage 19: Building graphs for flexible alignment."
 
+    _dir="${align_exp}/${inference_tag}/decode"
+    primary_outputs=${_dir}/primary_outputs
+
     # init_export_dir=data/aligned_iter_0/raw
     # TODO: Change
-    init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
+    # init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
+    init_export_dir=${primary_outputs}/export
     flex_align_dir=${align_exp}/flex_align/decode
     out_dir=${flex_align_dir}/outputs
     mkdir -p ${out_dir}
@@ -1165,9 +1300,13 @@ if [ ${stage} -le 20 ] && [ ${stop_stage} -ge 20 ]; then
         _ngpu=0
     fi
 
+    _dir="${align_exp}/${inference_tag}/decode"
+    primary_outputs=${_dir}/primary_outputs
+
     # TODO: Change
     # init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
-    init_export_dir=/home/cxiao7/research/espnet-cxiao/egs2/commonvoice_align/asr1/dump_align/raw/flex_data
+    # init_export_dir=/home/cxiao7/research/espnet-cxiao/egs2/commonvoice_align/asr1/dump_align/raw/flex_data
+    init_export_dir=${primary_outputs}/export
     flex_align_dir=${align_exp}/flex_align/decode
     _data="${data_feats}/flex_data"
 
@@ -1180,7 +1319,7 @@ if [ ${stage} -le 20 ] && [ ${stop_stage} -ge 20 ]; then
 
     # Split the wav.scp file and the corresponding text file generated by
     # previous stages
-    wav_key_file=${init_export_dir}/wav.scp
+    wav_key_file=${_data}/wav.scp
     _logdir=${flex_align_dir}/logdir
     mkdir -p "${_logdir}"
     _nj=$(min "${inference_nj}" "$(wc <${wav_key_file} -l)")
@@ -1231,23 +1370,27 @@ fi
 
 if [ ${stage} -le 21 ] && [ ${stop_stage} -ge 21 ]; then
     log "Stage 21: Form stm files."
+    _dir="${align_exp}/${inference_tag}/decode"
+    primary_outputs=${_dir}/primary_outputs
+
     # TODO: Change
-    init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
+    # init_export_dir=/home/cxiao7/research/speech2text/for_k2/data
+    init_export_dir=${primary_outputs}/export
     flex_align_dir=${align_exp}/flex_align/decode
     out_dir=${flex_align_dir}/outputs
     seg_file=${flex_align_dir}/re_seg/data/segments
 
-    # # Note that this algorithm requires sorted wav.scp before flexible alignment
-    # ${python} local/clean_salign.py \
-    #     --input_dir "${flex_align_dir}" \
-    #     --output_dir "${out_dir}" \
-    #     --text_map ${init_export_dir}/text_map \
-    #     --segments "${seg_file}"
+    # Note that this algorithm requires sorted wav.scp before flexible alignment
+    ${python} local/clean_salign.py \
+        --input_dir "${flex_align_dir}" \
+        --output_dir "${out_dir}" \
+        --text_map ${init_export_dir}/text_map \
+        --segments "${seg_file}"
 
-    # ${python} local/merge_alignments.py \
-    #     --input_dir "${out_dir}"
+    ${python} local/merge_alignments.py \
+        --input_dir "${out_dir}"
 
-    ${python} local/cal_align_wer.py --input_dir "${out_dir}/data" --textmap ${init_export_dir}/text_map
+    # ${python} local/cal_align_wer.py --input_dir "${out_dir}/data" --textmap ${init_export_dir}/text_map
 fi
 
 # if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then

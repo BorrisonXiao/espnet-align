@@ -34,6 +34,7 @@ egs*/*/*/db
 egs*/*/*/downloads
 egs*/*/*/dump
 egs*/*/*/dump_align
+egs*/*/*/dump_v*
 egs*/*/*/enhan
 egs*/*/*/exp
 egs*/*/*/fbank

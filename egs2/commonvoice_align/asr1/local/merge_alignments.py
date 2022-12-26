@@ -47,6 +47,10 @@ def resolve_overlap(prev, next):
                 it = (f"sent{start_sentid + i:03}", uttid, start, end, text)
                 res.append(it)
             return res
+        
+        # No point keep going forward/backward if the end of the previous stm is earlier than the start of the current next
+        if prev[-1][3] < ns:
+            break
 
         # Iterate from the back to find matching start point of the start of the next stm
         for i in reversed(range(len(prev))):
@@ -54,9 +58,6 @@ def resolve_overlap(prev, next):
             sentid, uttid, ps, pe, pt = item
             # The current item (in next) does not have a corresponding segment in prev
             if pe < ns:
-                # for it in prev[:i + 1]:
-                #     # Trust the next stm file in the case of no overlapping text is found but has time overlap
-                #     res.append(it)
                 if cn == 0:
                     # Store the overlap starting region for later use, i.e. if no textual overlap is found,
                     # sentences in the next will overwrite the prev

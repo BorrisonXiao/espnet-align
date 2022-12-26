@@ -4,9 +4,28 @@ import os
 from pathlib import Path
 from utils import mkdir_if_not_exist, scpid2mid, extract_mid
 import pinyin_jyutping_sentence
-import cn2an
+# import cn2an
 import re
-from seg2text import text_char_seg
+# from seg2text import text_char_seg
+# from tn.chinese.normalizer import Normalizer
+# import opencc
+
+# cn_normalizer = Normalizer()
+# cn_converter = opencc.OpenCC('t2s.json')
+
+
+# def normalize_can_text(text):
+#     # Convert traditional Chinese to simplifed Chinese
+#     text = cn_converter.convert(text)
+#     # Normalize numbers using WeTextProcessing
+#     text = cn_normalizer.normalize(text)
+#     # Remove Chinese punctuations
+#     text = re.sub(chinese_punc, '', text)
+#     # Remove all spaces
+#     text = re.sub(r"\s+", "", text.strip())
+#     # TODO: Maybe preserve the between-English spaces but whatever
+
+#     return text
 
 
 def eliminate_tone(scp_phoneme):
@@ -30,11 +49,11 @@ def prep_txt(decoded_dir, text_map, output_dir, use_phoneme=False, ignore_tone=F
     for scpid, scp_fp in scps.items():
         mid_dir = os.path.join(dump_dir, scpid2mid(scpid))
         with open(scp_fp, "r") as f:
-            scp = f.read()
+            scp = f.read().strip()
             # Merge instances such as "1980 年" to "1980年" for better an2cn conversion
-            scp = re.sub(r"(\d\d\d\d)\s年", r"\1年", scp)
+            # scp = re.sub(r"(\d\d\d\d)\s年", r"\1年", scp)
             # Convert the numbers into characters and insert the spaces properly
-            scp = text_char_seg(cn2an.transform(scp, "an2cn"))
+            # scp = text_char_seg(cn2an.transform(scp, "an2cn"))
 
         if use_phoneme:
             scp_phoneme = pinyin_jyutping_sentence.jyutping(
@@ -88,6 +107,9 @@ def prep_txt(decoded_dir, text_map, output_dir, use_phoneme=False, ignore_tone=F
     with open(os.path.join(output_dir, "search_map"), "w") as f:
         for mid in os.listdir(dump_dir):
             hyp_dir = os.path.join(dump_dir, mid, "hyp", token_type)
+            if not os.path.isdir(hyp_dir):
+                # Skip undecoded meetings
+                continue
             ref_dir = os.path.join(dump_dir, mid, "ref", token_type)
             for ref in os.listdir(ref_dir):
                 all_refs.add(ref.rstrip(".ref"))
