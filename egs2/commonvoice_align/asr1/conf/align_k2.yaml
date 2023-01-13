@@ -1,6 +1,6 @@
 batch_size: 1
-search_beam_size: 400
-output_beam_size: 400
+search_beam_size: 256
+output_beam_size: 256
 penalty: 0.0
 maxlenratio: 0.0
 minlenratio: 0.0

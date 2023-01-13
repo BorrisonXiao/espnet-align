@@ -7,8 +7,6 @@ def build_map(input_dir, output, use_phoneme=True):
     token_type = "phoneme" if use_phoneme else "char"
     with open(output, "w") as f:
         for mid in os.listdir(input_dir):
-            if mid != "M19120002":
-                continue
             hyp = os.path.join(input_dir, mid, "hyp", token_type, mid + ".hyp")
             ref = os.path.join(input_dir, mid, "ref", token_type, mid + ".ref")
             assert os.path.exists(hyp) and os.path.exists(ref), f"{hyp}, {ref}"

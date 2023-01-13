@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 import re
 
+FNAME_MAX_LEN = 100
+TRIMMED_LEN = 30
+
 
 def mkdir_if_not_exist(path):
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -25,6 +28,17 @@ def extract_mid(string):
     return None
 
 
+def cut_uttid_len(uttid):
+    # Potential bug: If the uttid is too long, it will be trimmed doesn't guarantee the uniqueness of the uttid
+
+    # The uttid will be trimmed to FNAME_MAX_LEN characters to avoid the error of "too long filename"
+    if len(uttid) > FNAME_MAX_LEN:
+        utt_metalabel, rest = uttid.split("_", maxsplit=1)
+        utt_metalabel = utt_metalabel[:TRIMMED_LEN]
+        uttid = utt_metalabel + "_" + rest
+    return uttid
+
+
 def read_wavscp(file, raw=False):
     """
     Read the wav.scp file and return a dict of {uttid: wav_path}.
@@ -34,10 +48,11 @@ def read_wavscp(file, raw=False):
         for line in f:
             if raw:
                 line = line.strip().split()
-                mid, wav_path = line[0], line[3]
+                uttid, wav_path = line[0], line[3]
             else:
-                mid, wav_path = line.strip().split(maxsplit=1)
-            res[mid] = wav_path
+                uttid, wav_path = line.strip().split(maxsplit=1)
+            uttid = cut_uttid_len(uttid)
+            res[uttid] = wav_path
     return res
 
 

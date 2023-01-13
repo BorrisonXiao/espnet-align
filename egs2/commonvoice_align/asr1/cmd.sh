@@ -98,7 +98,9 @@ elif [ "${cmd_backend}" = jhu ]; then
 
     export train_cmd="queue.pl --mem 32"
     export cuda_cmd="queue-freegpu.pl --mem 32 --gpu 1 --hostname [bc][1]* --config conf/queue.conf"
-    export decode_cmd="queue.pl --mem 40G"
+    export decode_cmd="queue.pl --mem 8G"
+    # For flexible alignment
+    export flex_align_cmd="queue.pl --mem 50G"
 
 else
     echo "$0: Error: Unknown cmd_backend=${cmd_backend}" 1>&2
