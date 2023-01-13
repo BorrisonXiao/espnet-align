@@ -187,7 +187,7 @@
 
 
 <div class="viewcode-block" id="RNNP"><a class="viewcode-back" href="../../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.transducer.rnn_encoder.RNNP">[docs]</a><span class="k">class</span> <span class="nc">RNNP</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;RNN with projection layer module.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;RNN with projection layer module.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        idim: Input dimension.</span>
@@ -212,7 +212,7 @@
         <span class="n">dropout_rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">aux_output_layers</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[],</span>
     <span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Initialize RNNP module.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize RNNP module.&quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
 
         <span class="n">bidir</span> <span class="o">=</span> <span class="n">rnn_type</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;b&quot;</span>
@@ -250,7 +250,7 @@
         <span class="n">rnn_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">prev_states</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-        <span class="sd">&quot;&quot;&quot;RNNP forward.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;RNNP forward.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            rnn_input: RNN input sequences. (B, T, D_in)</span>
@@ -326,7 +326,7 @@
 
 
 <div class="viewcode-block" id="RNN"><a class="viewcode-back" href="../../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.transducer.rnn_encoder.RNN">[docs]</a><span class="k">class</span> <span class="nc">RNN</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;RNN module.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;RNN module.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        idim: Input dimension.</span>
@@ -349,7 +349,7 @@
         <span class="n">dropout_rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
         <span class="n">aux_output_layers</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[],</span>
     <span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Initialize RNN module.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize RNN module.&quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
 
         <span class="n">bidir</span> <span class="o">=</span> <span class="n">rnn_type</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;b&quot;</span>
@@ -385,7 +385,7 @@
         <span class="n">rnn_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">prev_states</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
-        <span class="sd">&quot;&quot;&quot;RNN forward.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;RNN forward.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            rnn_input: RNN input sequences. (B, T, D_in)</span>
@@ -464,7 +464,7 @@
 <div class="viewcode-block" id="reset_backward_rnn_state"><a class="viewcode-back" href="../../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.transducer.rnn_encoder.reset_backward_rnn_state">[docs]</a><span class="k">def</span> <span class="nf">reset_backward_rnn_state</span><span class="p">(</span>
     <span class="n">states</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]]:</span>
-    <span class="sd">&quot;&quot;&quot;Set backward BRNN states to zeroes.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set backward BRNN states to zeroes.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        states: Encoder hidden states.</span>
@@ -483,7 +483,7 @@
 
 
 <div class="viewcode-block" id="VGG2L"><a class="viewcode-back" href="../../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.transducer.rnn_encoder.VGG2L">[docs]</a><span class="k">class</span> <span class="nc">VGG2L</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;VGG-like module.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;VGG-like module.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        in_channel: number of input channels</span>
@@ -491,7 +491,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">in_channel</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Initialize VGG-like module.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize VGG-like module.&quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">VGG2L</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
 
         <span class="c1"># CNN layer (VGG motivated)</span>
@@ -505,7 +505,7 @@
 <div class="viewcode-block" id="VGG2L.forward"><a class="viewcode-back" href="../../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.transducer.rnn_encoder.VGG2L.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">feats</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">feats_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]:</span>
-        <span class="sd">&quot;&quot;&quot;VGG2L forward.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;VGG2L forward.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            feats: Feature sequences. (B, F, D_feats)</span>
@@ -550,7 +550,7 @@
 
 
 <div class="viewcode-block" id="Encoder"><a class="viewcode-back" href="../../../../../_gen/espnet.nets.html#espnet.nets.pytorch_backend.transducer.rnn_encoder.Encoder">[docs]</a><span class="k">class</span> <span class="nc">Encoder</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
-    <span class="sd">&quot;&quot;&quot;Encoder module.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encoder module.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        idim: Input dimension.</span>
@@ -575,7 +575,7 @@
         <span class="n">dropout_rate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
         <span class="n">aux_enc_output_layers</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[],</span>
     <span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Initialize Encoder module.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize Encoder module.&quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">Encoder</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
 
         <span class="n">rnn_type</span> <span class="o">=</span> <span class="n">etype</span><span class="o">.</span><span class="n">lstrip</span><span class="p">(</span><span class="s2">&quot;vgg&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;p&quot;</span><span class="p">)</span>
@@ -652,7 +652,7 @@
         <span class="n">feats_len</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">prev_states</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="sd">&quot;&quot;&quot;Forward encoder.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Forward encoder.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            feats: Feature sequences. (B, F, D_feats)</span>
@@ -714,7 +714,7 @@
     <span class="n">subsample</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
     <span class="n">aux_enc_output_layers</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">:</span>
-    <span class="sd">&quot;&quot;&quot;Instantiate a RNN encoder with specified arguments.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Instantiate a RNN encoder with specified arguments.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        args: The model arguments.</span>

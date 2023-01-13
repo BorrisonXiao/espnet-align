@@ -220,7 +220,7 @@
 
 
 <span class="k">def</span> <span class="nf">issubtype</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">recursive</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-    <span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Check if the left-side type is a subtype of the right-side type.</span>
 <span class="sd">    If any of type is a composite type like `Union` and `TypeVar` with</span>
 <span class="sd">    bounds, it would be expanded into a list of types and check all</span>
@@ -277,7 +277,7 @@
 
 
 <span class="k">def</span> <span class="nf">_issubtype_with_constraints</span><span class="p">(</span><span class="n">variant</span><span class="p">,</span> <span class="n">constraints</span><span class="p">,</span> <span class="n">recursive</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-    <span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Check if the variant is a subtype of either one from constraints.</span>
 <span class="sd">    For composite types like `Union` and `TypeVar` with bounds, they</span>
 <span class="sd">    would be expanded for testing.</span>
@@ -379,7 +379,7 @@
 
 
 <span class="k">class</span> <span class="nc">_DataPipeType</span><span class="p">:</span>
-    <span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Save type annotation in `param`</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
@@ -417,7 +417,7 @@
 
 
 <span class="k">class</span> <span class="nc">_DataPipeMeta</span><span class="p">(</span><span class="n">GenericMeta</span><span class="p">):</span>
-    <span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Metaclass for `DataPipe`. Add `type` attribute and `__init_subclass__` based</span>
 <span class="sd">    on the type, and validate the return hint of `__iter__`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -544,7 +544,7 @@
                                 <span class="s2">&quot; for </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">sub_cls</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="n">_type_repr</span><span class="p">(</span><span class="n">data_type</span><span class="p">),</span> <span class="n">sub_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="p">))</span>
 
 <span class="k">def</span> <span class="nf">reinforce_type</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expected_type</span><span class="p">):</span>
-    <span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Reinforce the type for DataPipe instance. And the &#39;expected_type&#39; is required</span>
 <span class="sd">    to be a subtype of the original type hint to restrict the type requirement</span>
 <span class="sd">    of DataPipe instance.</span>
