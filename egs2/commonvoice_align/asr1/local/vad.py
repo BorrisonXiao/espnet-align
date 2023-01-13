@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 from clip_segments import clip_single_audio
 from pydub import AudioSegment
-from utils import mkdir_if_not_exist
+from utils import mkdir_if_not_exist, cut_uttid_len
 import re
 import logging
 
@@ -13,6 +13,8 @@ punc = re.compile(r'\(|\)|\！|\？|\。|\＂|\＃|\＄|\％|\＆|\＇|\（|\）
 
 
 def labels2sec(labels, fs, uttid):
+    uttid = cut_uttid_len(uttid)
+
     res = {}
     for i, label in enumerate(labels):
         res[f"{uttid}_seg{i+1:04}"] = {"start": label["start"]

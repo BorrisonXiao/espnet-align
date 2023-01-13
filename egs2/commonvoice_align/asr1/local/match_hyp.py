@@ -158,7 +158,15 @@ def anchor(ref, hyp, op, ratio_threshold=0.2, score_threshold=0.4):
             segid += 1
     # print(ref)
 
+    # To fix the <sep> not aligned to the start bug
+    to_start = False
     for i, char in enumerate(hyp):
+        if not to_start and is_sep(char):
+            to_start = True
+            continue
+        if not to_start:
+            continue
+        
         if is_sep(char) and i > 0:
             hyp_sidx = hyp_eidx
             hyp_eidx = i

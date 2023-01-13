@@ -17,9 +17,10 @@ asr_inference_config=conf/decode_asr.yaml
 asr_model_dir=pretrain_exp/asr_train_asr_conformer5_raw_zh-HK_word_sp
 finetune_asr_config=conf/tuning/finetune_asr_conformer5.yaml
 lm_tag=biased
+# dumpdir="/export/b18/cxiao7/hk_legco/dump_align"
 dumpdir="/export/b18/cxiao7/hk_legco/dump_v4"
 
-input_text_dir="/home/cxiao7/research/speech2text/align_data_v3/processed/txt"
+input_text_dir="/home/cxiao7/research/speech2text/align_data_v4/processed/txt"
 
 if [[ "${lang}" == *"zh"* ]]; then
   nbpe=2500
@@ -34,7 +35,7 @@ fi
 # Command for training ASR
 ./align.sh \
   --ngpu 2 \
-  --nj 80 \
+  --nj 64 \
   --lang "${lang}" \
   --use_lm false \
   --token_type phn \
@@ -47,9 +48,9 @@ fi
   --test_sets ${test_set} \
   --asr_tag "decode_vad" \
   --asr_exp ${asr_model_dir} \
-  --expdir align_exp \
+  --expdir align_exp_v4 \
   --lm_tag ${lm_tag} \
-  --inference_nj 80 \
+  --inference_nj 15 \
   --phoneme_align false \
   --pretrain_asr true \
   --asr_lm_config ${asr_lm_config} \
@@ -64,8 +65,8 @@ fi
   --flex_overlap_size 30 \
   --flex_deletion_weight 0 \
   --flex_insertion_weight -2 \
-  --stage 3 \
-  --stop_stage 3
+  --stage 22 \
+  --stop_stage 22
 
 # ./align.sh \
 #     --ngpu 2 \

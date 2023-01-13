@@ -406,13 +406,13 @@ class k2Speech2Text:
 
             assert len(hyps) == len(split_size)
         else:
+            # import pdb; pdb.set_trace()
             best_paths = one_best_decoding(lattices, use_double_scores=True)
             scores = best_paths.get_tot_scores(
                 use_double_scores=True, log_semiring=False
             ).tolist()
             hyps = get_texts(best_paths)
             timestamps = get_texts_with_timestamp(best_paths).timestamps
-            # logging.info(timestamps)
 
         assert len(scores) == len(hyps)
 
@@ -606,6 +606,7 @@ def inference(
                 # On-demand rebuild of speech2text object to use the correct decoding graph
                 # Note that this one-item-cache-like strategy makes the order of keys CRUCIAL
                 batch_uttid = segid2uttid(keys[0])
+                logging.info(f"Processing {keys[0]}...")
                 if batch_uttid not in graphs:
                     # Fixme (Cihan): some meetings do not have utterances for some reason
                     logging.info(
@@ -623,6 +624,9 @@ def inference(
                 logging.warning(f"Utterance {keys} {e}")
                 hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
                 results = [[" ", ["<space>"], [2], hyp]] * nbest
+            except RuntimeError as e:
+                logging.warning(f"Runtime error occured for {keys}: {e}")
+                continue
 
             # Since each batch takes a long time on CPU
             # if progress % 10 == 0:

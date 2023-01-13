@@ -12,6 +12,8 @@ def parse_stm(file):
     Helper function for parsing a stm file.
     Input is a path to the stm file.
     Returns a sorted list of tuples (sentid, uttid, start, end, text).
+    Note that it might run into returning [] due to empty stm file caused by previous execution error,
+    e.g. Grid failure.
     """
     res = []
     with open(file, "r") as f:
@@ -22,7 +24,7 @@ def parse_stm(file):
     return res
 
 
-def resolve_overlap(prev, next):
+def resolve_overlap(prev, next_stm):
     """
     Helper function for resolving the (time) overlap between two stm parses.
     Returns a list of resolved sentences.
@@ -30,19 +32,25 @@ def resolve_overlap(prev, next):
     res = []
     found_anchor = False
     overlap_prev_sentidx = 0
+    cn = 0
 
     # Heuristically search for the first 5 sentences at the start of the next stm
-    for cn in range(min(5, len(next))):
+    for cn in range(min(5, len(next_stm))):
         if found_anchor:
             break
 
-        _, _, ns, ne, nt = next[cn]
+        _, _, ns, ne, nt = next_stm[cn]
+        try:
+            prev[-1][3]
+        except IndexError as e:
+            print(prev)
+            raise
         if cn == 0 and prev[-1][3] < ns:
             # No overlap if the start of the next stm is later than the end of the previous one
             for item in prev:
                 res.append(item)
             start_sentid = len(res)
-            for item in next:
+            for i, item in enumerate(next_stm):
                 _, uttid, start, end, text = item
                 it = (f"sent{start_sentid + i:03}", uttid, start, end, text)
                 res.append(it)
@@ -56,11 +64,11 @@ def resolve_overlap(prev, next):
         for i in reversed(range(len(prev))):
             item = prev[i]
             sentid, uttid, ps, pe, pt = item
-            # The current item (in next) does not have a corresponding segment in prev
+            # The current item (in next_stm) does not have a corresponding segment in prev
             if pe < ns:
                 if cn == 0:
                     # Store the overlap starting region for later use, i.e. if no textual overlap is found,
-                    # sentences in the next will overwrite the prev
+                    # sentences in the next_stm will overwrite the prev
                     overlap_prev_sentidx = i + 1
                 break
             # If the starting time of two identical text is not too far away
@@ -80,7 +88,7 @@ def resolve_overlap(prev, next):
 
     start_sentid = len(res)
     # The out-of-scope usage of variable here is dangerous in programming, but whatever
-    for i, item in enumerate(next[cn:]):
+    for i, item in enumerate(next_stm[cn:]):
         _, uttid, start, end, text = item
         it = (f"sent{start_sentid + i:03}", uttid, start, end, text)
         res.append(it)
@@ -94,7 +102,6 @@ def merge_alignments(input_dir):
     mkdir_if_not_exist(output_dir)
 
     for uttid in os.listdir(raw_dir):
-        # with open(os.path.join(output_dir, f"{uttid}.stm"), "w") as ofh:
         utt_dir = os.path.join(raw_dir, uttid)
 
         # In theory the stm files should be sorted already, but just in case
@@ -104,8 +111,13 @@ def merge_alignments(input_dir):
             if i == 0:
                 prev = parse_stm(seg)
             else:
-                next = parse_stm(seg)
-                overlap = resolve_overlap(prev, next)
+                next_stm = parse_stm(seg)
+                if next_stm == []:
+                    continue
+                if prev == []:
+                    prev = next_stm
+                    continue
+                overlap = resolve_overlap(prev, next_stm)
                 prev = overlap
 
         with open(os.path.join(output_dir, uttid + ".stm"), "w") as ofh:

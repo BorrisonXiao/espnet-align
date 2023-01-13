@@ -4,7 +4,7 @@ import argparse
 import logging
 from pathlib import Path
 import os
-from utils import mkdir_if_not_exist
+from utils import mkdir_if_not_exist, cut_uttid_len
 import shutil
 
 
@@ -29,7 +29,7 @@ def _seg(segments, output, vad=True, window_size=180, overlap=30):
                     seg_start = start
                 if end >= seg_start + window_size or i == len(lines) - 1:
                     seg_end = end
-                    print(f"{uttid}_seg{segid:04}", uttid, seg_start, seg_end, file=ofh)
+                    print(f"{cut_uttid_len(uttid)}_seg{segid:04}", uttid, seg_start, seg_end, file=ofh)
                     # Doesn't really need the start to be vad segmented
                     seg_start = seg_end - overlap
                     segid += 1
@@ -48,17 +48,23 @@ def reseg(wav_scp, output_dir, vad_dir, vad=True, window_size=180, overlap=30):
     uttids = []
     raw_dir = os.path.join(output_dir, "decode")
     mkdir_if_not_exist(raw_dir)
+
+    # To solve the bug: If the uttid is too long, it will be trimmed and thus can't find the segments file
+    uttid_map = {}
+    for uttid in os.listdir(os.path.join(vad_dir, "decode")):
+        uttid_map[cut_uttid_len(uttid)] = uttid
+
     with open(wav_scp, "r") as f:
         for line in f:
             uttids.append(line.strip().split(maxsplit=1)[0])
     for uttid in uttids:
-        segfile = os.path.join(vad_dir, "decode", uttid, "segments")
-        assert os.path.exists(segfile)
-        _out_dir = os.path.join(raw_dir, uttid)
+        segfile = os.path.join(vad_dir, "decode", uttid_map[uttid], "segments")
+        assert os.path.exists(segfile), f"Error: {segfile} doesn't exist..."
+        _out_dir = os.path.join(raw_dir, uttid_map[uttid])
         mkdir_if_not_exist(_out_dir)
 
         # Copy over the wav.scp in vad_dir
-        src_scp = os.path.join(vad_dir, "decode", uttid, "wav.scp")
+        src_scp = os.path.join(vad_dir, "decode", uttid_map[uttid], "wav.scp")
         dst_scp = os.path.join(_out_dir, "wav.scp")
         shutil.copyfile(src_scp, dst_scp)
 

@@ -106,6 +106,15 @@ if [ -n "${segments}" ]; then
             "--segment=${logdir}/segments.JOB" \
             "${scp}" "${outdir}/format.JOB"
 
+    # # TODO: Fix this
+    # ${cmd} "JOB=36" "${logdir}/format_wav_scp.JOB.log" \
+    #     pyscripts/audio/format_wav_scp.py \
+    #         ${opts} \
+    #         --fs ${fs} \
+    #         --audio-format "${audio_format}" \
+    #         "--segment=${logdir}/segments.JOB" \
+    #         "${scp}" "${outdir}/format.JOB"
+
 else
     log "[info]: without segments"
     nutt=$(<${scp} wc -l)

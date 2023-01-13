@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from utils import scpid2mid, extract_mid, mkdir_if_not_exist
 from collections import defaultdict
+import logging
 
 EPS = "***"
 
@@ -21,7 +22,7 @@ def read_text_map(file, decode=False):
 
     # Sort the scps by their order in the original text
     for mid in res:
-        res[mid].sort(key=lambda x: x[0].split("_")[2])
+        res[mid].sort(key=lambda x: int(x[0].split("_")[2]))
 
     return res
 
@@ -41,9 +42,10 @@ def break_sents(input_dir, output_dir, text_map, decode_text_map):
                     continue
                 start, end = list(map(int, line.split(maxsplit=1)))
 
-                # Note: This might have some issues if the decode_text_map has missing indices
+                # Note: This might have some issues if the decode_text_map has missing indices (manual tests seem to pass though)
                 output = os.path.join(txtdir, f"{decode_text_map[mid][i][0]}.txt")
                 with open(output, "w") as out:
+                    # Maybe use scpid here to keep track of the spkid
                     for scpid, fp in text_map[mid][start:end + 1]:
                         with open(fp, "r") as txt:
                             out.write(txt.read())
