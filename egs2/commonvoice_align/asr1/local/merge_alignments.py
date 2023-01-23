@@ -76,7 +76,7 @@ def resolve_overlap(prev, next_stm):
                 for it in prev[:i]:
                     res.append(it)
 
-                overlap_item = (sentid, uttid, ps, ne, pt)
+                overlap_item = (sentid, uttid, ps, ne, pt) if ne > ps else item
                 res.append(overlap_item)
                 found_anchor = True
                 break
@@ -87,7 +87,6 @@ def resolve_overlap(prev, next_stm):
             res.append(it)
 
     start_sentid = len(res)
-    # The out-of-scope usage of variable here is dangerous in programming, but whatever
     for i, item in enumerate(next_stm[cn:]):
         _, uttid, start, end, text = item
         it = (f"sent{start_sentid + i:03}", uttid, start, end, text)

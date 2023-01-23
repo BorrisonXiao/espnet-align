@@ -591,6 +591,11 @@ def inference(
                 logging.warning(f"Utterance {keys} {e}")
                 hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
                 results = [[" ", ["<space>"], [2], hyp]] * nbest
+            except RuntimeError as e:
+                # Sometimes the short utterance error is not caught by the TooShortWarning
+                logging.warning(f"Utterance {keys} {e}")
+                hyp = Hypothesis(score=0.0, scores={}, states={}, yseq=[])
+                results = [[" ", ["<space>"], [2], hyp]] * nbest
 
             if progress % 10 == 0:
                 curr_time = datetime.now()
