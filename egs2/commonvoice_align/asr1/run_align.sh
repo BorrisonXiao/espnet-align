@@ -35,7 +35,7 @@ fi
 # Command for training ASR
 ./align.sh \
   --ngpu 2 \
-  --nj 64 \
+  --nj 80 \
   --lang "${lang}" \
   --use_lm false \
   --token_type phn \
@@ -50,7 +50,7 @@ fi
   --asr_exp ${asr_model_dir} \
   --expdir align_exp_v4 \
   --lm_tag ${lm_tag} \
-  --inference_nj 15 \
+  --inference_nj 72 \
   --phoneme_align false \
   --pretrain_asr true \
   --asr_lm_config ${asr_lm_config} \
@@ -65,8 +65,9 @@ fi
   --flex_overlap_size 30 \
   --flex_deletion_weight 0 \
   --flex_insertion_weight -2 \
-  --stage 22 \
-  --stop_stage 22
+  --filter_wer_threshold 1.2 \
+  --stage 28 \
+  --stop_stage 28
 
 # ./align.sh \
 #     --ngpu 2 \

@@ -32,10 +32,6 @@ def prep_ref(text_map, output_dir, use_phoneme=False, ignore_tone=False):
     for i, (scpid, scp_fp) in enumerate(scps.items()):
         mid = scpid2mid(scpid)
 
-        # # TODO: Remove
-        # if mid != "M19120002" and mid != "M19120036":
-        #     continue
-
         if not prev_mid:
             prev_mid = mid
         
@@ -95,9 +91,6 @@ def prep_hyp(text_map, output_dir, use_phoneme=False, ignore_tone=False):
     # Combine reference text with <sep> as the delimiter indicating file switch
     for i, (uttid, hyp_fp) in enumerate(hyps.items()):
         mid = extract_mid(uttid)
-
-        # if mid != "M19120002" and mid != "M19120036":
-        #     continue
 
         if prev_mid == None:
             prev_mid = mid
