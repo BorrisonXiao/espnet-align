@@ -65,9 +65,9 @@ fi
   --flex_overlap_size 30 \
   --flex_deletion_weight 0 \
   --flex_insertion_weight -2 \
-  --filter_wer_threshold 1.2 \
-  --stage 28 \
-  --stop_stage 28
+  --filter_wer_threshold 0.99 \
+  --stage 32 \
+  --stop_stage 32
 
 # ./align.sh \
 #     --ngpu 2 \

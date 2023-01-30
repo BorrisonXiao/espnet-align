@@ -12,7 +12,7 @@ import numpy as np
 random.seed(10)
 
 
-def valid(wer, wer_threshold, info):
+def valid(wer, wer_threshold, info, ratio, duration):
     ref, hyp, op, csid = info
     c, s, i, d = csid
     ref_len = c + s + d
@@ -24,7 +24,7 @@ def valid(wer, wer_threshold, info):
         return False
     if ref_len < 8 and c <= 3:
         return False
-    if wer >= 1:
+    if wer >= 0.85:
         if ref_len >= 20 and c <= 8:
             return False
     # Find the maximum number of consecutive insertions and deletions
@@ -42,6 +42,9 @@ def valid(wer, wer_threshold, info):
         max_i = max(max_i, cur_i)
         max_d = max(max_d, cur_d)
     if max_i >= 8 or max_d >= 8:
+        return False
+    # After discussion it was decided to filter out too long utterances
+    if duration > 50:
         return False
     return True
 
@@ -90,9 +93,20 @@ def filter(input_dir, output_dir, wer, aligned_file, threshold, dumpdir):
 
     # Filter the segments, text and utt2spk file
     segs = read_seg(asr_dir / "segments")
+    total_duration = 0
+    token_count = 0
+    valid_segids = set()
     if dumpdir:
         segid2time = {}
-        valid_segids = set()
+    for seg in tqdm(segs):
+        segid, uttid, start, end = seg
+        csid = segid2aligned[segid][-1]
+        c, s, _, d = csid
+        ref_len = c + s + d
+        total_duration += (end - start)
+        token_count += ref_len
+    # Use the average duration to text ratio to filter the segments as well
+    avg_dur2text_ratio = token_count / total_duration
     with open(out_asr_dir / "segments", 'w') as seg_f:
         for seg in tqdm(segs):
             segid, uttid, start, end = seg
@@ -100,11 +114,10 @@ def filter(input_dir, output_dir, wer, aligned_file, threshold, dumpdir):
             if dumpdir:
                 segid2time[segid] = (start, end)
             wer = segid2wer[segid]
-            if valid(wer=wer, wer_threshold=threshold, info=segid2aligned[segid]):
+            if valid(wer=wer, wer_threshold=threshold, info=segid2aligned[segid], ratio=avg_dur2text_ratio, duration=float(end)-float(start)):
                 filtered_uttids.add(uttid)
                 filtered_stmidxs.add(segid2stmidx[segid])
-                if dumpdir:
-                    valid_segids.add(segid)
+                valid_segids.add(segid)
                 print(f"{segid} {uttid} {start} {end}", file=seg_f)
 
     texts = read_text(asr_dir / "text")
@@ -116,7 +129,7 @@ def filter(input_dir, output_dir, wer, aligned_file, threshold, dumpdir):
             if dumpdir:
                 segid2ref[segid] = txt
             wer = segid2wer[segid]
-            if valid(wer=wer, wer_threshold=threshold, info=segid2aligned[segid]):
+            if segid in valid_segids:
                 print(f"{segid} {txt}", file=text_f)
 
     utt2spks = read_utt2spk(asr_dir / "utt2spk", ignore_seg=False, return_list=True)
@@ -131,7 +144,7 @@ def filter(input_dir, output_dir, wer, aligned_file, threshold, dumpdir):
             if dumpdir:
                 spk_full_wer[spkid].append(segid2wer[segid])
             wer = segid2wer[segid]
-            if valid(wer=wer, wer_threshold=threshold, info=segid2aligned[segid]):
+            if segid in valid_segids:
                 print(f"{segid} {spkid}", file=utt2spk_f)
                 if dumpdir:
                     spk_duration[spkid] = spk_duration.get(

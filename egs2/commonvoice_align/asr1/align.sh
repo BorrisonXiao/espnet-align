@@ -1383,10 +1383,10 @@ if [ ${stage} -le 23 ] && [ ${stop_stage} -ge 23 ]; then
     # TODO: Formalize this step, this is a byproduct of a debugging script in the t2t pipeline
     mid_text_dir="/home/cxiao7/research/speech2text/random/sent_check"
 
-    # ${python} local/index_raw_stm.py \
-    #     --input_dir "${flex_align_dir}" \
-    #     --output_dir "${output_dir}" \
-    #     --mid_text_dir "${mid_text_dir}"
+    ${python} local/index_raw_stm.py \
+        --input_dir "${flex_align_dir}" \
+        --output_dir "${output_dir}" \
+        --mid_text_dir "${mid_text_dir}"
 
     ${python} local/export_bistm.py \
         --rstm_dir "${flex_align_dir}/outputs/data" \
@@ -1571,7 +1571,7 @@ if [ ${stage} -le 26 ] && [ ${stop_stage} -ge 26 ]; then
 fi
 
 if [ ${stage} -le 27 ] && [ ${stop_stage} -ge 27 ]; then
-    log "Stage 27: Filter out the instances with high-WER."
+    log "Stage 27: Filter out the instances with high WER and other metrics."
     _data_dir=${align_exp}/output/data
     filter_dir=${expdir}/filter
     output_dir=${filter_dir}/output
@@ -1600,7 +1600,7 @@ if [ ${stage} -le 28 ] && [ ${stop_stage} -ge 28 ]; then
     split_dir=${expdir}/splits
     mkdir -p "${split_dir}"
 
-    # TODO: Remove
+    # Create feature files for NACHOS
     _logdir="${filter_dir}/${inference_tag}/logdir"
     out_logdir="${split_dir}/logdir"
     mkdir -p "${out_logdir}"
@@ -1608,15 +1608,95 @@ if [ ${stage} -le 28 ] && [ ${stop_stage} -ge 28 ]; then
         --input_dir "${_logdir}/dump" \
         --data_dir "${_data_dir}" \
         --output_dir "${out_logdir}"
+fi
 
-    # # TODO: Make this automatic
-    # reffile=/home/cxiao7/research/espnet/egs2/commonvoice_align/asr1/align_exp_v4/filter/decode_k2_ngram_ngram_3gram_asr_model_valid.acc.best_use_k2_k2_ctc_decoding_true_use_nbest_rescoring_true/logdir/dump/split.dump
+if [ ${stage} -le 29 ] && [ ${stop_stage} -ge 29 ]; then
+    log "Stage 29: Gather some statistics of the splits and the whole dataset."
+    filter_dir=${expdir}/filter
+    _data_dir=${filter_dir}/output
+    split_dir=${expdir}/splits
+    stat_dir=${split_dir}/stats
+    mkdir -p "${stat_dir}"
+    spkfile=/home/cxiao7/research/espnet/egs2/commonvoice_align/asr1/align_exp_v4/filter/decode_k2_ngram_ngram_3gram_asr_model_valid.acc.best_use_k2_k2_ctc_decoding_true_use_nbest_rescoring_true/logdir/dump/spk.annot.dump
 
-    # # Filter out the instances with high WER
-    # ${python} local/split_data.py \
-    #     --input_dir "${_data_dir}" \
-    #     --output_dir "${split_dir}" \
-    #     --ref_file "${reffile}"
+    ${python} local/get_split_stats.py \
+        --data_dir ${split_dir} \
+        --annotfile ${spkfile} \
+        --output_dir ${stat_dir}
+fi
+
+if [ ${stage} -le 30 ] && [ ${stop_stage} -ge 30 ]; then
+    log "Stage 30: Replace the Cantonese text with the version with punctuation."
+    _dir="${align_exp}/${inference_tag}/decode"
+    primary_outputs=${_dir}/primary_outputs
+    wavscp=${primary_outputs}/export/wav.scp
+
+    init_export_dir=${primary_outputs}/export
+    flex_align_dir=${align_exp}/flex_align/decode
+    output_dir=${align_exp}/output_punc
+    # TODO: Formalize this instead of hardcoding
+    t2t_dir=/home/cxiao7/research/speech2text/scripts/t2t/exp_v4_3/vecalign/export/data
+    datefile=/home/cxiao7/research/speech2text/data/metadata/global/dates.json
+
+    # TODO: Formalize this step, this is a byproduct of a debugging script in the t2t pipeline
+    punc_text_dir="/home/cxiao7/research/speech2text/random/sent_punc"
+
+    ${python} local/export_bistm.py \
+        --rstm_dir "${flex_align_dir}/outputs/data" \
+        --punc_text_dir "${punc_text_dir}" \
+        --wavscp "${wavscp}" \
+        --idx_dir "${output_dir}/idx" \
+        --output_dir "${output_dir}/data" \
+        --t2t_dir "${t2t_dir}" \
+        --datefile "${datefile}"
+
+    sort -o "${output_dir}/data/asr/text.sorted" "${output_dir}/data/asr/text"
+    sort -o "${output_dir}/data/asr/utt2spk.sorted" "${output_dir}/data/asr/utt2spk"
+    sort -o "${output_dir}/data/asr/wav.scp.sorted" "${output_dir}/data/asr/wav.scp"
+    sort -o "${output_dir}/data/asr/segments.sorted" "${output_dir}/data/asr/segments"
+    mv "${output_dir}/data/asr/text.sorted" "${output_dir}/data/asr/text"
+    mv "${output_dir}/data/asr/utt2spk.sorted" "${output_dir}/data/asr/utt2spk"
+    mv "${output_dir}/data/asr/wav.scp.sorted" "${output_dir}/data/asr/wav.scp"
+    mv "${output_dir}/data/asr/segments.sorted" "${output_dir}/data/asr/segments"
+
+    utils/utt2spk_to_spk2utt.pl "${output_dir}/data/asr/utt2spk" >"${output_dir}/data/asr/spk2utt"
+fi
+
+if [ ${stage} -le 31 ] && [ ${stop_stage} -ge 31 ]; then
+    log "Stage 31: Filter out the instances with high WER and other metrics."
+    _data_dir=${align_exp}/output_punc/data
+    filter_dir=${expdir}/filter
+    output_dir=${filter_dir}/output_punc
+    _dir="${filter_dir}/${inference_tag}/decode"
+    _logdir="${filter_dir}/${inference_tag}/logdir"
+    aligned_file=${_logdir}/aligned.txt
+    wer_file=${_logdir}/wer.txt
+
+    # Filter out the instances with high WER
+    ${python} local/wer_filter.py \
+        --input_dir "${_data_dir}" \
+        --output "${output_dir}" \
+        --aligned_file "${aligned_file}" \
+        --wer "${wer_file}" \
+        --threshold "${filter_wer_threshold}"
+
+    /home/cxiao7/research/speech2text/scripts/t2t/utils/calc_seg_len.py \
+        --input "${output_dir}/asr/segments"
+
+fi
+
+if [ ${stage} -le 32 ] && [ ${stop_stage} -ge 32 ]; then
+    log "Stage 32: Gather some statistics of the splits and the whole dataset."
+    split_dir=${expdir}/splits
+    stat_dir=${split_dir}/stats
+    mkdir -p "${stat_dir}"
+    spkfile=/home/cxiao7/research/espnet/egs2/commonvoice_align/asr1/align_exp_v4/filter/decode_k2_ngram_ngram_3gram_asr_model_valid.acc.best_use_k2_k2_ctc_decoding_true_use_nbest_rescoring_true/logdir/dump/spk.annot.dump
+
+    ${python} local/get_split_stats.py \
+        --data_dir ${split_dir} \
+        --annotfile ${spkfile} \
+        --output_dir ${stat_dir} \
+        --punc
 fi
 
 # if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
