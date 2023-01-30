@@ -7,6 +7,7 @@ import ast
 
 SPK_TOKEN = " <spk> "
 T2T_TOKEN = " <t2t>"
+SCORE_TOKEN = " <score> "
 FNAME_MAX_LEN = 100
 TRIMMED_LEN = 30
 
@@ -31,6 +32,16 @@ def extract_mid(string):
     return None
 
 
+def calc_seg_time(file):
+    res = 0
+    sentences = read_seg(file)
+    for sent in sentences:
+        # end - start of each sentence
+        res += sent[3] - sent[2]
+    print(f"{res:.2f} secs | {res / 3600:.2f} hrs")
+    return res
+
+
 def cut_uttid_len(uttid, max_len=FNAME_MAX_LEN, trimmed_len=TRIMMED_LEN):
     # Potential bug: If the uttid is too long, it will be trimmed doesn't guarantee the uniqueness of the uttid
 
@@ -40,6 +51,31 @@ def cut_uttid_len(uttid, max_len=FNAME_MAX_LEN, trimmed_len=TRIMMED_LEN):
         utt_metalabel = utt_metalabel[:trimmed_len]
         uttid = utt_metalabel + "_" + rest
     return uttid
+
+
+def read_spkdump(file):
+    spk2info = {}
+    with open(file, 'r') as f:
+        lines = f.readlines()
+    for line in lines:
+        line = line.strip()
+        spk, val_wer, full_wer, duration, _, avg_dur = line.split('\t')
+        spk2info[spk] = dict(val_wer=float(val_wer), full_wer=float(
+            full_wer), duration=float(duration), avg_dur=float(avg_dur))
+    return spk2info
+
+
+def read_annot(file):
+    spkid2info = {}
+    with open(file, 'r') as f:
+        lines = f.readlines()
+    for line in lines:
+        line = line.strip()
+        splitted = line.split('\t')
+        spkid, val_wer, full_wer, secs, hrs, avg_secs, gender = splitted
+        spkid2info[spkid] = dict(val_wer=float(val_wer), full_wer=float(
+            full_wer), secs=float(secs), hrs=float(hrs), avg_secs=float(avg_secs), gender=int(gender))
+    return spkid2info
 
 
 def read_wavscp(file, raw=False):
@@ -68,6 +104,8 @@ def read_t2t(t2t):
     with open(t2t, "r") as f:
         for line in f:
             spkid, rest = line.strip().split(SPK_TOKEN, maxsplit=1)
+            score, rest = rest.split(SCORE_TOKEN, maxsplit=1)
+            score = float(score)
             try:
                 rest = rest.split(T2T_TOKEN, maxsplit=1)
                 if len(rest) == 1:
@@ -79,7 +117,7 @@ def read_t2t(t2t):
                 print(rest)
                 raise
             idxs = ast.literal_eval(idxs)
-            res.append((spkid, idxs, text))
+            res.append((spkid, score, idxs, text))
     return res
 
 
