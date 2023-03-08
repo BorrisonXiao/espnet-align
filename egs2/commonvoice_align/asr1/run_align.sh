@@ -66,8 +66,8 @@ fi
   --flex_deletion_weight 0 \
   --flex_insertion_weight -2 \
   --filter_wer_threshold 0.99 \
-  --stage 32 \
-  --stop_stage 32
+  --stage 33 \
+  --stop_stage 33
 
 # ./align.sh \
 #     --ngpu 2 \

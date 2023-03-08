@@ -137,10 +137,10 @@ def stats(spkfile: Path, data_dir: Path, output_dir: Path, punctuated: bool = Fa
     ax[0][1].set_xlabel('Utterance Length (seconds)')
     ax[1][0].set_xlabel('Utterance Length (seconds)')
     ax[1][1].set_xlabel('Utterance Length (seconds)')
-    ax[0][0].set_xlim(0, 80)
-    ax[0][1].set_xlim(0, 80)
-    ax[1][0].set_xlim(0, 80)
-    ax[1][1].set_xlim(0, 80)
+    ax[0][0].set_xlim(0, 55)
+    ax[0][1].set_xlim(0, 55)
+    ax[1][0].set_xlim(0, 55)
+    ax[1][1].set_xlim(0, 55)
 
     fig.savefig(output_dir / 'utt_len_dist.png')
 
@@ -155,8 +155,6 @@ def stats(spkfile: Path, data_dir: Path, output_dir: Path, punctuated: bool = Fa
             lines = f.readlines()
         sent_count[dset] = len(lines)
         total_sent_count += sent_count[dset]
-        # print(dset)
-        # print(sum([len(line.split()[-1]) for line in lines]))
         token_count[dset] = sum([len(line.split()[5:]) for line in lines]) if not punctuated else sum([len(line.split()[-1]) for line in lines])
         total_token_count += token_count[dset]
     for dset in SPLITS:
@@ -172,9 +170,13 @@ def stats(spkfile: Path, data_dir: Path, output_dir: Path, punctuated: bool = Fa
 
     token_count = Counter()
     total_token_count = 0
+    txt_len_dist = {dset: [] for dset in SPLITS}
     for dset in SPLITS:
         with open(data_dir / 'st' / f'st-can2eng.{dset}.stm', 'r') as f:
             lines = f.readlines()
+        for line in lines:
+            txt_len = len(line.split()[5:])
+            txt_len_dist[dset].append(txt_len)
         token_count[dset] = sum([len(line.split()[5:]) for line in lines])
         total_token_count += token_count[dset]
     for dset in SPLITS:
@@ -185,6 +187,26 @@ def stats(spkfile: Path, data_dir: Path, output_dir: Path, punctuated: bool = Fa
     print(f'The total number of tokens is {total_token_count:,}.')
     print(f'The average number of tokens per utterance is {total_token_count / total_sent_count:.2f}.\n')
 
+    # Plot the distribution of the English token-level text length
+    fig, ax = plt.subplots(2, 2, figsize=(16, 14))
+    ax[0][0].hist(txt_len_dist['train'], bins=50, label='Train')
+    ax[0][1].hist(txt_len_dist['test'], bins=50, label='Test')
+    ax[1][0].hist(txt_len_dist['dev-asr'], bins=50, label='Dev-ASR')
+    ax[1][1].hist(txt_len_dist['dev-mt'], bins=50, label='Dev-MT')
+    ax[0][0].set_title('English Token-Level Text Length Distribution for Train')
+    ax[0][1].set_title('English Token-Level Text Length Distribution for Test')
+    ax[1][0].set_title('English Token-Level Text Length Distribution for Dev-ASR')
+    ax[1][1].set_title('English Token-Level Text Length Distribution for Dev-MT')
+    ax[0][0].set_xlabel('English Token-Level Text Length')
+    ax[0][1].set_xlabel('English Token-Level Text Length')
+    ax[1][0].set_xlabel('English Token-Level Text Length')
+    ax[1][1].set_xlabel('English Token-Level Text Length')
+    ax[0][0].set_xlim(0, 80)
+    ax[0][1].set_xlim(0, 80)
+    ax[1][0].set_xlim(0, 80)
+    ax[1][1].set_xlim(0, 80)
+
+    fig.savefig(output_dir / 'txt_len_dist.png')
 
 def main():
     parser = argparse.ArgumentParser(

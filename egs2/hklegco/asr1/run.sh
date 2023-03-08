@@ -5,28 +5,31 @@ set -e
 set -u
 set -o pipefail
 
-train_set="train"
-valid_set="dev"
-test_sets="dev"
+train_set=train
+train_dev=dev
+test_set=test1
 
-asr_config=conf/tuning/train_asr_transformer3_w2v_large_lv60_960h_finetuning_last_1layer.yaml
-lm_config=conf/tuning/train_lm_transformer2.yaml
+asr_config=conf/train_asr_conformer.yaml
 inference_config=conf/decode_asr.yaml
 
+nbpe=1000
+
 ./asr.sh \
-    --lang zh-HK \
-    --ngpu 4 \
-    --nbpe 5000 \
-    --max_wav_duration 1000 \
+    --ngpu 1 \
+    --stage 1 \
+    --stop_stage 13 \
+    --audio_format "flac.ark" \
+    --local_data_opts "--stage 0" \
+    --use_lm false \
+    --token_type bpe \
+    --nbpe $nbpe \
+    --feats_type raw \
     --speed_perturb_factors "0.9 1.0 1.1" \
     --asr_config "${asr_config}" \
-    --lm_config "${lm_config}" \
     --inference_config "${inference_config}" \
     --train_set "${train_set}" \
-    --valid_set "${valid_set}" \
-    --test_sets "${test_sets}" \
-    --lm_train_text "data/${train_set}/text data/local/other_text/text" \
-    --bpe_train_text "data/${train_set}/text" "$@" \
-    --feats_normalize utt_mvn \
-    --stage 12 \
-    --stop-stage 12
+    --valid_set "${train_dev}" \
+    --test_sets "${test_set}" \
+    --inference_nj 40 \
+    --bpe_train_text "data/${train_set}/text" \
+    --lm_train_text "data/${train_set}/text" "$@"
