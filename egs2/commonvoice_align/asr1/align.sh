@@ -1699,6 +1699,20 @@ if [ ${stage} -le 32 ] && [ ${stop_stage} -ge 32 ]; then
         --punc
 fi
 
+if [ ${stage} -le 33 ] && [ ${stop_stage} -ge 33 ]; then
+    log "Stage 33: Perform subsplit of the dev datasets to reduce their size."
+    split_dir=${expdir}/splits
+    tgt_split_dir=${expdir}/subsplits
+    mkdir -p "${tgt_split_dir}"
+    spkfile=/home/cxiao7/research/espnet/egs2/commonvoice_align/asr1/align_exp_v4/filter/decode_k2_ngram_ngram_3gram_asr_model_valid.acc.best_use_k2_k2_ctc_decoding_true_use_nbest_rescoring_true/logdir/dump/spk.annot.dump
+
+    ${python} local/subsplit.py \
+        --data_dir ${split_dir} \
+        --annotfile ${spkfile} \
+        --output_dir ${split_dir} \
+        --punc
+fi
+
 # if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
 #     log "Stage 19: Start bootstrapping for alignment improvement."
 #     primary_outputs=${align_exp}/${inference_tag}/decode/primary_outputs
