@@ -116,7 +116,7 @@ if [ -n "${segments}" ]; then
     #         "--segment=${logdir}/segments.JOB" \
     #         "${scp}" "${outdir}/format.JOB"
 
->>>>>>> Half-way through massive process with a bunch of bug fixes and a CKY-like parsing algorithm for sentence matching
+>>>>>>> 66b05522124773f22d774ef63eafca1d877e5945
 else
     log "[info]: without segments"
     nutt=$(<${scp} wc -l)

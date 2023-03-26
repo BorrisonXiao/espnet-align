@@ -104,6 +104,9 @@ if [ -n "${segments}" ]; then
             --audio-format "${audio_format}" \
             "--segment=${logdir}/segments.JOB" \
             "${scp}" "${outdir}/format.JOB"
+
+    # # TODO: Fix this
+    # ${cmd} "JOB=36" "${logdir}/format_wav_scp.JOB.log" \
 else
     log "[info]: without segments"
     nutt=$(<${scp} wc -l)
