@@ -20,37 +20,6 @@ aggregate_stats_dirs.py
                             Input directories (default: None)
       --output_dir OUTPUT_DIR
                             Output directory (default: None)
-.. _enh_scoring.py:
-
-enh_scoring.py
-~~~~~~~~~~~~~~
-
-.. code-block:: none
-
-    usage: enh_scoring.py [-h] [--config CONFIG]
-                          [--log_level {CRITICAL,ERROR,WARNING,INFO,DEBUG,NOTSET}]
-                          --output_dir OUTPUT_DIR
-                          [--dtype {float16,float32,float64}] --ref_scp REF_SCP
-                          --inf_scp INF_SCP [--key_file KEY_FILE]
-                          [--ref_channel REF_CHANNEL]
-                          [--flexible_numspk FLEXIBLE_NUMSPK]
-    
-    Frontend inference
-    
-    optional arguments:
-      --config CONFIG       Give config file in yaml format (default: None)
-      --log_level {CRITICAL,ERROR,WARNING,INFO,DEBUG,NOTSET}
-                            The verbose level of logging (default: INFO)
-      --output_dir OUTPUT_DIR
-      --dtype {float16,float32,float64}
-                            Data type (default: float32)
-    
-    Input data related:
-      --ref_scp REF_SCP
-      --inf_scp INF_SCP
-      --key_file KEY_FILE
-      --ref_channel REF_CHANNEL
-      --flexible_numspk FLEXIBLE_NUMSPK
 .. _launch.py:
 
 launch.py

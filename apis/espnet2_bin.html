@@ -144,7 +144,6 @@
 <li class="toctree-l1"><a class="reference internal" href="espnet_bin.html">core tools</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">core tools (espnet2)</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#aggregate-stats-dirs-py-1">aggregate_stats_dirs.py</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#enh-scoring-py-1">enh_scoring.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#launch-py-1">launch.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#pack-py-1">pack.py</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#split-scps-py-1">split_scps.py</a></li>
@@ -178,31 +177,7 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  
-<style>
-/* CSS overrides for sphinx_rtd_theme */
-
-/* 24px margin */
-.nbinput.nblast.container,
-.nboutput.nblast.container {
-    margin-bottom: 19px;  /* padding has already 5px */
-}
-
-/* ... except between code cells! */
-.nblast.container + .nbinput.container {
-    margin-top: -19px;
-}
-
-.admonition > p:before {
-    margin-right: 4px;  /* make room for the exclamation icon */
-}
-
-/* Fix math alignment, see https://github.com/rtfd/sphinx_rtd_theme/pull/686 */
-.math {
-    text-align: unset;
-}
-</style>
-<section id="core-tools-espnet2-1">
+  <section id="core-tools-espnet2-1">
 <span id="core-tools-espnet2"></span><h1>core tools (espnet2)<a class="headerlink" href="#core-tools-espnet2-1" title="Permalink to this headline">¶</a></h1>
 <p>ESPnet2 provides several command-line tools for training and evaluating neural networks (NN) under <code class="docutils literal notranslate"><span class="pre">espnet2/bin</span></code>:</p>
 <section id="aggregate-stats-dirs-py-1">
@@ -222,35 +197,6 @@ optional arguments:
                         Input directories (default: None)
   --output_dir OUTPUT_DIR
                         Output directory (default: None)
-</pre></div>
-</div>
-</section>
-<section id="enh-scoring-py-1">
-<span id="enh-scoring-py"></span><h2>enh_scoring.py<a class="headerlink" href="#enh-scoring-py-1" title="Permalink to this headline">¶</a></h2>
-<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>usage: enh_scoring.py [-h] [--config CONFIG]
-                      [--log_level {CRITICAL,ERROR,WARNING,INFO,DEBUG,NOTSET}]
-                      --output_dir OUTPUT_DIR
-                      [--dtype {float16,float32,float64}] --ref_scp REF_SCP
-                      --inf_scp INF_SCP [--key_file KEY_FILE]
-                      [--ref_channel REF_CHANNEL]
-                      [--flexible_numspk FLEXIBLE_NUMSPK]
-
-Frontend inference
-
-optional arguments:
-  --config CONFIG       Give config file in yaml format (default: None)
-  --log_level {CRITICAL,ERROR,WARNING,INFO,DEBUG,NOTSET}
-                        The verbose level of logging (default: INFO)
-  --output_dir OUTPUT_DIR
-  --dtype {float16,float32,float64}
-                        Data type (default: float32)
-
-Input data related:
-  --ref_scp REF_SCP
-  --inf_scp INF_SCP
-  --key_file KEY_FILE
-  --ref_channel REF_CHANNEL
-  --flexible_numspk FLEXIBLE_NUMSPK
 </pre></div>
 </div>
 </section>
