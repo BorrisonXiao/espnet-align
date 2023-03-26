@@ -94,3 +94,5 @@ tools/icefall
 
 # Random scripts
 egs2/commonvoice_align/local/test_lattice.py
+egs2/hklegco
+egs2/hklegco_deprecated
