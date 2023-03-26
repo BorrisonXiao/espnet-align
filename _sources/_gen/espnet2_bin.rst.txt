@@ -81,12 +81,12 @@ pack.py
 
 .. code-block:: none
 
-    usage: pack.py [-h] {asr,st,tts,enh,diar,enh_s2t} ...
+    usage: pack.py [-h] {asr,st,tts,enh,diar,svs,enh_s2t} ...
     
     Pack input files to archive format
     
     positional arguments:
-      {asr,st,tts,enh,diar,enh_s2t}
+      {asr,st,tts,enh,diar,svs,enh_s2t}
     
     optional arguments:
 .. _split_scps.py:

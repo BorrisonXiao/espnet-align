@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>espnet2.asr package &mdash; ESPnet 202205 documentation</title><link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <title>espnet2.asr package &mdash; ESPnet 202211 documentation</title><link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
   <!--[if lt IE 9]>
     <script src="../_static/js/html5shiv.min.js"></script>
@@ -36,7 +36,7 @@
             ESPnet
           </a>
               <div class="version">
-                202205
+                202211
               </div>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
@@ -114,11 +114,15 @@
 <li class="toctree-l1"><a class="reference internal" href="espnet.transform.html">espnet.transform package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet.bin.html">espnet.bin package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet.vc.html">espnet.vc package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="espnet.distributed.html">espnet.distributed package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet.asr.html">espnet.asr package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.train.html">espnet2.train package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.tasks.html">espnet2.tasks package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="espnet2.asr_transducer.html">espnet2.asr_transducer package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="espnet2.svs.html">espnet2.svs package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.enh.html">espnet2.enh package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.hubert.html">espnet2.hubert package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="espnet2.gan_svs.html">espnet2.gan_svs package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.tts.html">espnet2.tts package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.utils.html">espnet2.utils package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.layers.html">espnet2.layers package</a></li>
@@ -132,6 +136,7 @@
 <li class="toctree-l1"><a class="reference internal" href="espnet2.main_funcs.html">espnet2.main_funcs package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.schedulers.html">espnet2.schedulers package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.bin.html">espnet2.bin package</a></li>
+<li class="toctree-l1"><a class="reference internal" href="espnet2.slu.html">espnet2.slu package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.gan_tts.html">espnet2.gan_tts package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.text.html">espnet2.text package</a></li>
 <li class="toctree-l1"><a class="reference internal" href="espnet2.diar.html">espnet2.diar package</a></li>
@@ -142,31 +147,37 @@
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-maskctc-model-1">espnet2.asr.maskctc_model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-ctc-1">espnet2.asr.ctc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-espnet-model-1">espnet2.asr.espnet_model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-pit-espnet-model-1">espnet2.asr.pit_espnet_model</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-specaug-specaug-1">espnet2.asr.specaug.specaug</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-specaug-init-1">espnet2.asr.specaug.__init__</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-specaug-abs-specaug-1">espnet2.asr.specaug.abs_specaug</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-transducer-utils-1">espnet2.asr.transducer.utils</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-transducer-transducer-decoder-1">espnet2.asr.transducer.transducer_decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-transducer-error-calculator-1">espnet2.asr.transducer.error_calculator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-transducer-init-1">espnet2.asr.transducer.__init__</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-transducer-beam-search-transducer-1">espnet2.asr.transducer.beam_search_transducer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-transducer-joint-network-1">espnet2.asr.transducer.joint_network</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-frontend-s3prl-1">espnet2.asr.frontend.s3prl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-frontend-init-1">espnet2.asr.frontend.__init__</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-frontend-windowing-1">espnet2.asr.frontend.windowing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-frontend-fused-1">espnet2.asr.frontend.fused</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-frontend-abs-frontend-1">espnet2.asr.frontend.abs_frontend</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-frontend-default-1">espnet2.asr.frontend.default</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-layers-init-1">espnet2.asr.layers.__init__</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-layers-cgmlp-1">espnet2.asr.layers.cgmlp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-layers-fastformer-1">espnet2.asr.layers.fastformer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-decoder-mlm-decoder-1">espnet2.asr.decoder.mlm_decoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-decoder-transducer-decoder-1">espnet2.asr.decoder.transducer_decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-decoder-init-1">espnet2.asr.decoder.__init__</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-decoder-rnn-decoder-1">espnet2.asr.decoder.rnn_decoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-decoder-hugging-face-transformers-decoder-1">espnet2.asr.decoder.hugging_face_transformers_decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-decoder-transformer-decoder-1">espnet2.asr.decoder.transformer_decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-decoder-abs-decoder-1">espnet2.asr.decoder.abs_decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-contextual-block-transformer-encoder-1">espnet2.asr.encoder.contextual_block_transformer_encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-abs-encoder-1">espnet2.asr.encoder.abs_encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-contextual-block-conformer-encoder-1">espnet2.asr.encoder.contextual_block_conformer_encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-init-1">espnet2.asr.encoder.__init__</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-transformer-encoder-multispkr-1">espnet2.asr.encoder.transformer_encoder_multispkr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-vgg-rnn-encoder-1">espnet2.asr.encoder.vgg_rnn_encoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-branchformer-encoder-1">espnet2.asr.encoder.branchformer_encoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-e-branchformer-encoder-1">espnet2.asr.encoder.e_branchformer_encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-rnn-encoder-1">espnet2.asr.encoder.rnn_encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-wav2vec2-encoder-1">espnet2.asr.encoder.wav2vec2_encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#espnet2-asr-encoder-transformer-encoder-1">espnet2.asr.encoder.transformer_encoder</a></li>
@@ -229,6 +240,9 @@
 <section id="espnet2-asr-espnet-model-1">
 <span id="espnet2-asr-espnet-model"></span><h2>espnet2.asr.espnet_model<a class="headerlink" href="#espnet2-asr-espnet-model-1" title="Permalink to this headline">¶</a></h2>
 </section>
+<section id="espnet2-asr-pit-espnet-model-1">
+<span id="espnet2-asr-pit-espnet-model"></span><h2>espnet2.asr.pit_espnet_model<a class="headerlink" href="#espnet2-asr-pit-espnet-model-1" title="Permalink to this headline">¶</a></h2>
+</section>
 <section id="espnet2-asr-specaug-specaug-1">
 <span id="espnet2-asr-specaug-specaug"></span><h2>espnet2.asr.specaug.specaug<a class="headerlink" href="#espnet2-asr-specaug-specaug-1" title="Permalink to this headline">¶</a></h2>
 </section>
@@ -261,38 +275,6 @@ registered hooks while the latter silently ignores them.</p>
 
 </dd></dl>
 
-</section>
-<section id="espnet2-asr-transducer-utils-1">
-<span id="espnet2-asr-transducer-utils"></span><h2>espnet2.asr.transducer.utils<a class="headerlink" href="#espnet2-asr-transducer-utils-1" title="Permalink to this headline">¶</a></h2>
-<span class="target" id="module-espnet2.asr.transducer.utils"></span><p>Utility functions for Transducer models.</p>
-<dl class="function">
-<dt id="espnet2.asr.transducer.utils.get_transducer_task_io">
-<code class="sig-prename descclassname">espnet2.asr.transducer.utils.</code><code class="sig-name descname">get_transducer_task_io</code><span class="sig-paren">(</span><em class="sig-param">labels: torch.Tensor</em>, <em class="sig-param">encoder_out_lens: torch.Tensor</em>, <em class="sig-param">ignore_id: int = -1</em>, <em class="sig-param">blank_id: int = 0</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/transducer/utils.html#get_transducer_task_io"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.transducer.utils.get_transducer_task_io" title="Permalink to this definition">¶</a></dt>
-<dd><p>Get Transducer loss I/O.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>labels</strong> – Label ID sequences. (B, L)</p></li>
-<li><p><strong>encoder_out_lens</strong> – Encoder output lengths. (B,)</p></li>
-<li><p><strong>ignore_id</strong> – Padding symbol ID.</p></li>
-<li><p><strong>blank_id</strong> – Blank symbol ID.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Decoder inputs. (B, U)
-target: Target label ID sequences. (B, U)
-t_len: Time lengths. (B,)
-u_len: Label lengths. (B,)</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>decoder_in</p>
-</dd>
-</dl>
-</dd></dl>
-
-</section>
-<section id="espnet2-asr-transducer-transducer-decoder-1">
-<span id="espnet2-asr-transducer-transducer-decoder"></span><h2>espnet2.asr.transducer.transducer_decoder<a class="headerlink" href="#espnet2-asr-transducer-transducer-decoder-1" title="Permalink to this headline">¶</a></h2>
 </section>
 <section id="espnet2-asr-transducer-error-calculator-1">
 <span id="espnet2-asr-transducer-error-calculator"></span><h2>espnet2.asr.transducer.error_calculator<a class="headerlink" href="#espnet2-asr-transducer-error-calculator-1" title="Permalink to this headline">¶</a></h2>
@@ -381,7 +363,7 @@ char_target: Target character sequences. (B, ?)</p>
 <span class="target" id="module-espnet2.asr.transducer.beam_search_transducer"></span><p>Search algorithms for Transducer models.</p>
 <dl class="class">
 <dt id="espnet2.asr.transducer.beam_search_transducer.BeamSearchTransducer">
-<em class="property">class </em><code class="sig-prename descclassname">espnet2.asr.transducer.beam_search_transducer.</code><code class="sig-name descname">BeamSearchTransducer</code><span class="sig-paren">(</span><em class="sig-param">decoder: espnet2.asr.decoder.abs_decoder.AbsDecoder</em>, <em class="sig-param">joint_network: espnet2.asr.transducer.joint_network.JointNetwork</em>, <em class="sig-param">beam_size: int</em>, <em class="sig-param">lm: torch.nn.modules.module.Module = None</em>, <em class="sig-param">lm_weight: float = 0.1</em>, <em class="sig-param">search_type: str = 'default'</em>, <em class="sig-param">max_sym_exp: int = 2</em>, <em class="sig-param">u_max: int = 50</em>, <em class="sig-param">nstep: int = 1</em>, <em class="sig-param">prefix_alpha: int = 1</em>, <em class="sig-param">expansion_gamma: int = 2.3</em>, <em class="sig-param">expansion_beta: int = 2</em>, <em class="sig-param">score_norm: bool = True</em>, <em class="sig-param">nbest: int = 1</em>, <em class="sig-param">token_list: List[str] = None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/transducer/beam_search_transducer.html#BeamSearchTransducer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.transducer.beam_search_transducer.BeamSearchTransducer" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">espnet2.asr.transducer.beam_search_transducer.</code><code class="sig-name descname">BeamSearchTransducer</code><span class="sig-paren">(</span><em class="sig-param">decoder: espnet2.asr.decoder.abs_decoder.AbsDecoder</em>, <em class="sig-param">joint_network: espnet2.asr_transducer.joint_network.JointNetwork</em>, <em class="sig-param">beam_size: int</em>, <em class="sig-param">lm: torch.nn.modules.module.Module = None</em>, <em class="sig-param">lm_weight: float = 0.1</em>, <em class="sig-param">search_type: str = 'default'</em>, <em class="sig-param">max_sym_exp: int = 2</em>, <em class="sig-param">u_max: int = 50</em>, <em class="sig-param">nstep: int = 1</em>, <em class="sig-param">prefix_alpha: int = 1</em>, <em class="sig-param">expansion_gamma: int = 2.3</em>, <em class="sig-param">expansion_beta: int = 2</em>, <em class="sig-param">score_norm: bool = True</em>, <em class="sig-param">nbest: int = 1</em>, <em class="sig-param">token_list: Optional[List[str]] = None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/transducer/beam_search_transducer.html#BeamSearchTransducer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.transducer.beam_search_transducer.BeamSearchTransducer" title="Permalink to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Beam search implementation for Transducer.</p>
 <p>Initialize Transducer search module.</p>
@@ -570,49 +552,6 @@ until further modifications.</p>
 </dd></dl>
 
 </section>
-<section id="espnet2-asr-transducer-joint-network-1">
-<span id="espnet2-asr-transducer-joint-network"></span><h2>espnet2.asr.transducer.joint_network<a class="headerlink" href="#espnet2-asr-transducer-joint-network-1" title="Permalink to this headline">¶</a></h2>
-<span class="target" id="module-espnet2.asr.transducer.joint_network"></span><p>Transducer joint network implementation.</p>
-<dl class="class">
-<dt id="espnet2.asr.transducer.joint_network.JointNetwork">
-<em class="property">class </em><code class="sig-prename descclassname">espnet2.asr.transducer.joint_network.</code><code class="sig-name descname">JointNetwork</code><span class="sig-paren">(</span><em class="sig-param">joint_output_size: int</em>, <em class="sig-param">encoder_output_size: int</em>, <em class="sig-param">decoder_output_size: int</em>, <em class="sig-param">joint_space_size: int = 256</em>, <em class="sig-param">joint_activation_type: str = 'tanh'</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/transducer/joint_network.html#JointNetwork"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.transducer.joint_network.JointNetwork" title="Permalink to this definition">¶</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
-<p>Transducer joint network module.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>joint_output_size</strong> – Joint network output dimension</p></li>
-<li><p><strong>encoder_output_size</strong> – Encoder output dimension.</p></li>
-<li><p><strong>decoder_output_size</strong> – Decoder output dimension.</p></li>
-<li><p><strong>joint_space_size</strong> – Dimension of joint space.</p></li>
-<li><p><strong>joint_activation_type</strong> – Type of activation for joint network.</p></li>
-</ul>
-</dd>
-</dl>
-<p>Joint network initializer.</p>
-<dl class="method">
-<dt id="espnet2.asr.transducer.joint_network.JointNetwork.forward">
-<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param">enc_out: torch.Tensor</em>, <em class="sig-param">dec_out: torch.Tensor</em><span class="sig-paren">)</span> &#x2192; torch.Tensor<a class="reference internal" href="../_modules/espnet2/asr/transducer/joint_network.html#JointNetwork.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.transducer.joint_network.JointNetwork.forward" title="Permalink to this definition">¶</a></dt>
-<dd><p>Joint computation of encoder and decoder hidden state sequences.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>enc_out</strong> – Expanded encoder output state sequences (B, T, 1, D_enc)</p></li>
-<li><p><strong>dec_out</strong> – Expanded decoder output state sequences (B, 1, U, D_dec)</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>Joint output state sequences. (B, T, U, D_out)</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>joint_out</p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-</section>
 <section id="espnet2-asr-frontend-s3prl-1">
 <span id="espnet2-asr-frontend-s3prl"></span><h2>espnet2.asr.frontend.s3prl<a class="headerlink" href="#espnet2-asr-frontend-s3prl-1" title="Permalink to this headline">¶</a></h2>
 </section>
@@ -657,14 +596,144 @@ registered hooks while the latter silently ignores them.</p>
 <section id="espnet2-asr-frontend-default-1">
 <span id="espnet2-asr-frontend-default"></span><h2>espnet2.asr.frontend.default<a class="headerlink" href="#espnet2-asr-frontend-default-1" title="Permalink to this headline">¶</a></h2>
 </section>
+<section id="espnet2-asr-layers-init-1">
+<span id="espnet2-asr-layers-init"></span><h2>espnet2.asr.layers.__init__<a class="headerlink" href="#espnet2-asr-layers-init-1" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-espnet2.asr.layers.__init__"></span></section>
+<section id="espnet2-asr-layers-cgmlp-1">
+<span id="espnet2-asr-layers-cgmlp"></span><h2>espnet2.asr.layers.cgmlp<a class="headerlink" href="#espnet2-asr-layers-cgmlp-1" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-espnet2.asr.layers.cgmlp"></span><p>MLP with convolutional gating (cgMLP) definition.</p>
+<p class="rubric">References</p>
+<p><a class="reference external" href="https://openreview.net/forum?id=RA-zVvZLYIy">https://openreview.net/forum?id=RA-zVvZLYIy</a>
+<a class="reference external" href="https://arxiv.org/abs/2105.08050">https://arxiv.org/abs/2105.08050</a></p>
+<dl class="class">
+<dt id="espnet2.asr.layers.cgmlp.ConvolutionalGatingMLP">
+<em class="property">class </em><code class="sig-prename descclassname">espnet2.asr.layers.cgmlp.</code><code class="sig-name descname">ConvolutionalGatingMLP</code><span class="sig-paren">(</span><em class="sig-param">size: int</em>, <em class="sig-param">linear_units: int</em>, <em class="sig-param">kernel_size: int</em>, <em class="sig-param">dropout_rate: float</em>, <em class="sig-param">use_linear_after_conv: bool</em>, <em class="sig-param">gate_activation: str</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/cgmlp.html#ConvolutionalGatingMLP"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.cgmlp.ConvolutionalGatingMLP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<p>Convolutional Gating MLP (cgMLP).</p>
+<dl class="method">
+<dt id="espnet2.asr.layers.cgmlp.ConvolutionalGatingMLP.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">mask</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/cgmlp.html#ConvolutionalGatingMLP.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.cgmlp.ConvolutionalGatingMLP.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Defines the computation performed at every call.</p>
+<p>Should be overridden by all subclasses.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Although the recipe for forward pass needs to be defined within
+this function, one should call the <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code> instance afterwards
+instead of this since the former takes care of running the
+registered hooks while the latter silently ignores them.</p>
+</aside>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="espnet2.asr.layers.cgmlp.ConvolutionalSpatialGatingUnit">
+<em class="property">class </em><code class="sig-prename descclassname">espnet2.asr.layers.cgmlp.</code><code class="sig-name descname">ConvolutionalSpatialGatingUnit</code><span class="sig-paren">(</span><em class="sig-param">size: int</em>, <em class="sig-param">kernel_size: int</em>, <em class="sig-param">dropout_rate: float</em>, <em class="sig-param">use_linear_after_conv: bool</em>, <em class="sig-param">gate_activation: str</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/cgmlp.html#ConvolutionalSpatialGatingUnit"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.cgmlp.ConvolutionalSpatialGatingUnit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<p>Convolutional Spatial Gating Unit (CSGU).</p>
+<dl class="method">
+<dt id="espnet2.asr.layers.cgmlp.ConvolutionalSpatialGatingUnit.espnet_initialization_fn">
+<code class="sig-name descname">espnet_initialization_fn</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/cgmlp.html#ConvolutionalSpatialGatingUnit.espnet_initialization_fn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.cgmlp.ConvolutionalSpatialGatingUnit.espnet_initialization_fn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="espnet2.asr.layers.cgmlp.ConvolutionalSpatialGatingUnit.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param">x</em>, <em class="sig-param">gate_add=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/cgmlp.html#ConvolutionalSpatialGatingUnit.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.cgmlp.ConvolutionalSpatialGatingUnit.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Forward method</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>torch.Tensor</em>) – (N, T, D)</p></li>
+<li><p><strong>gate_add</strong> (<em>torch.Tensor</em>) – (N, T, D/2)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(N, T, D/2)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>out (torch.Tensor)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="espnet2-asr-layers-fastformer-1">
+<span id="espnet2-asr-layers-fastformer"></span><h2>espnet2.asr.layers.fastformer<a class="headerlink" href="#espnet2-asr-layers-fastformer-1" title="Permalink to this headline">¶</a></h2>
+<span class="target" id="module-espnet2.asr.layers.fastformer"></span><p>Fastformer attention definition.</p>
+<dl class="simple">
+<dt>Reference:</dt><dd><p>Wu et al., “Fastformer: Additive Attention Can Be All You Need”
+<a class="reference external" href="https://arxiv.org/abs/2108.09084">https://arxiv.org/abs/2108.09084</a>
+<a class="reference external" href="https://github.com/wuch15/Fastformer">https://github.com/wuch15/Fastformer</a></p>
+</dd>
+</dl>
+<dl class="class">
+<dt id="espnet2.asr.layers.fastformer.FastSelfAttention">
+<em class="property">class </em><code class="sig-prename descclassname">espnet2.asr.layers.fastformer.</code><code class="sig-name descname">FastSelfAttention</code><span class="sig-paren">(</span><em class="sig-param">size</em>, <em class="sig-param">attention_heads</em>, <em class="sig-param">dropout_rate</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/fastformer.html#FastSelfAttention"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.fastformer.FastSelfAttention" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">torch.nn.modules.module.Module</span></code></p>
+<p>Fast self-attention used in Fastformer.</p>
+<dl class="method">
+<dt id="espnet2.asr.layers.fastformer.FastSelfAttention.espnet_initialization_fn">
+<code class="sig-name descname">espnet_initialization_fn</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/fastformer.html#FastSelfAttention.espnet_initialization_fn"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.fastformer.FastSelfAttention.espnet_initialization_fn" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="espnet2.asr.layers.fastformer.FastSelfAttention.forward">
+<code class="sig-name descname">forward</code><span class="sig-paren">(</span><em class="sig-param">xs_pad</em>, <em class="sig-param">mask</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/fastformer.html#FastSelfAttention.forward"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.fastformer.FastSelfAttention.forward" title="Permalink to this definition">¶</a></dt>
+<dd><p>Forward method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>xs_pad</strong> – (batch, time, size = n_heads * attn_dim)</p></li>
+<li><p><strong>mask</strong> – (batch, 1, time), nonpadding is 1, padding is 0</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(batch, time, size)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="espnet2.asr.layers.fastformer.FastSelfAttention.init_weights">
+<code class="sig-name descname">init_weights</code><span class="sig-paren">(</span><em class="sig-param">module</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/fastformer.html#FastSelfAttention.init_weights"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.fastformer.FastSelfAttention.init_weights" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="method">
+<dt id="espnet2.asr.layers.fastformer.FastSelfAttention.transpose_for_scores">
+<code class="sig-name descname">transpose_for_scores</code><span class="sig-paren">(</span><em class="sig-param">x</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/espnet2/asr/layers/fastformer.html#FastSelfAttention.transpose_for_scores"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#espnet2.asr.layers.fastformer.FastSelfAttention.transpose_for_scores" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reshape and transpose to compute scores.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>x</strong> – (batch, time, size = n_heads * attn_dim)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>(batch, n_heads, time, attn_dim)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
 <section id="espnet2-asr-decoder-mlm-decoder-1">
 <span id="espnet2-asr-decoder-mlm-decoder"></span><h2>espnet2.asr.decoder.mlm_decoder<a class="headerlink" href="#espnet2-asr-decoder-mlm-decoder-1" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="espnet2-asr-decoder-transducer-decoder-1">
+<span id="espnet2-asr-decoder-transducer-decoder"></span><h2>espnet2.asr.decoder.transducer_decoder<a class="headerlink" href="#espnet2-asr-decoder-transducer-decoder-1" title="Permalink to this headline">¶</a></h2>
 </section>
 <section id="espnet2-asr-decoder-init-1">
 <span id="espnet2-asr-decoder-init"></span><h2>espnet2.asr.decoder.__init__<a class="headerlink" href="#espnet2-asr-decoder-init-1" title="Permalink to this headline">¶</a></h2>
 <span class="target" id="module-espnet2.asr.decoder.__init__"></span></section>
 <section id="espnet2-asr-decoder-rnn-decoder-1">
 <span id="espnet2-asr-decoder-rnn-decoder"></span><h2>espnet2.asr.decoder.rnn_decoder<a class="headerlink" href="#espnet2-asr-decoder-rnn-decoder-1" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="espnet2-asr-decoder-hugging-face-transformers-decoder-1">
+<span id="espnet2-asr-decoder-hugging-face-transformers-decoder"></span><h2>espnet2.asr.decoder.hugging_face_transformers_decoder<a class="headerlink" href="#espnet2-asr-decoder-hugging-face-transformers-decoder-1" title="Permalink to this headline">¶</a></h2>
 </section>
 <section id="espnet2-asr-decoder-transformer-decoder-1">
 <span id="espnet2-asr-decoder-transformer-decoder"></span><h2>espnet2.asr.decoder.transformer_decoder<a class="headerlink" href="#espnet2-asr-decoder-transformer-decoder-1" title="Permalink to this headline">¶</a></h2>
@@ -731,8 +800,17 @@ registered hooks while the latter silently ignores them.</p>
 <section id="espnet2-asr-encoder-init-1">
 <span id="espnet2-asr-encoder-init"></span><h2>espnet2.asr.encoder.__init__<a class="headerlink" href="#espnet2-asr-encoder-init-1" title="Permalink to this headline">¶</a></h2>
 <span class="target" id="module-espnet2.asr.encoder.__init__"></span></section>
+<section id="espnet2-asr-encoder-transformer-encoder-multispkr-1">
+<span id="espnet2-asr-encoder-transformer-encoder-multispkr"></span><h2>espnet2.asr.encoder.transformer_encoder_multispkr<a class="headerlink" href="#espnet2-asr-encoder-transformer-encoder-multispkr-1" title="Permalink to this headline">¶</a></h2>
+</section>
 <section id="espnet2-asr-encoder-vgg-rnn-encoder-1">
 <span id="espnet2-asr-encoder-vgg-rnn-encoder"></span><h2>espnet2.asr.encoder.vgg_rnn_encoder<a class="headerlink" href="#espnet2-asr-encoder-vgg-rnn-encoder-1" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="espnet2-asr-encoder-branchformer-encoder-1">
+<span id="espnet2-asr-encoder-branchformer-encoder"></span><h2>espnet2.asr.encoder.branchformer_encoder<a class="headerlink" href="#espnet2-asr-encoder-branchformer-encoder-1" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="espnet2-asr-encoder-e-branchformer-encoder-1">
+<span id="espnet2-asr-encoder-e-branchformer-encoder"></span><h2>espnet2.asr.encoder.e_branchformer_encoder<a class="headerlink" href="#espnet2-asr-encoder-e-branchformer-encoder-1" title="Permalink to this headline">¶</a></h2>
 </section>
 <section id="espnet2-asr-encoder-rnn-encoder-1">
 <span id="espnet2-asr-encoder-rnn-encoder"></span><h2>espnet2.asr.encoder.rnn_encoder<a class="headerlink" href="#espnet2-asr-encoder-rnn-encoder-1" title="Permalink to this headline">¶</a></h2>

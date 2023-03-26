@@ -113,3 +113,14 @@ espnet2.text.cleaner
     :undoc-members:
     :show-inheritance:
 
+
+.. _espnet2.text.hugging_face_tokenizer:
+
+espnet2.text.hugging_face_tokenizer
+-----------------------------------
+
+.. automodule:: espnet2.text.hugging_face_tokenizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
